@@ -9,7 +9,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "parse": "node scripts/parse-excel.mjs",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "parse:composition": "node scripts/parse-composition.mjs",
+    "match": "node scripts/dump-ingredients.mjs && node scripts/match-ingredients.mjs",
+    "seed:composition": "node scripts/seed-composition.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

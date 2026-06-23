@@ -2,7 +2,8 @@ import { supabase } from './supabase'
 
 const one = (v: unknown): any => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 
-const RECIPE_SEL = 'dish_ingredients(amount_g, sort_order, ingredients(name))'
+const RECIPE_SEL =
+  'dish_ingredients(amount_g, sort_order, ingredients(name, food_code, food_composition(energy_kcal, protein_g, fat_g, carbohydrate_g, salt_g)))'
 const SET_SEL = `code, category,
   staple:staple_dish_id(name, notes, ${RECIPE_SEL}),
   main:main_dish_id(name, notes, ${RECIPE_SEL}),
@@ -47,6 +48,13 @@ export async function fetchDailyMenus(): Promise<DailyMenuListItem[]> {
 export interface DayDishItem {
   name: string
   perPerson: number | null
+  // 1人前の栄養（成分表紐付け済みかつ分量入力済みのときのみ算出。それ以外は null）
+  kcal: number | null
+  protein: number | null
+  fat: number | null
+  carb: number | null
+  salt: number | null
+  hasData: boolean // 成分表に紐付け済みか（食材マスタに food_code あり）
 }
 export interface DaySlot {
   slot: string
@@ -81,8 +89,24 @@ export interface DailyMenuFull {
 const itemsOf = (dish: any): DayDishItem[] =>
   (dish?.dish_ingredients ?? [])
     .slice()
-    .sort((a: any, b: any) => a.sort_order - b.sort_order)
-    .map((di: any) => ({ name: one(di.ingredients)?.name ?? '?', perPerson: di.amount_g }))
+    .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    .map((di: any): DayDishItem => {
+      const ing = one(di.ingredients)
+      const fc = one(ing?.food_composition)
+      const amt = di.amount_g
+      const f = amt != null ? amt / 100 : null
+      const v = (x: number | null | undefined) => (f != null && x != null ? f * x : null)
+      return {
+        name: ing?.name ?? '?',
+        perPerson: amt,
+        kcal: v(fc?.energy_kcal),
+        protein: v(fc?.protein_g),
+        fat: v(fc?.fat_g),
+        carb: v(fc?.carbohydrate_g),
+        salt: v(fc?.salt_g),
+        hasData: !!fc,
+      }
+    })
 
 const SLOT_LABELS: [string, string][] = [
   ['staple', '主食'],
@@ -212,6 +236,43 @@ export function aggregateTotals(data: DailyMenuFull): IngredientTotal[] {
   return [...sum.entries()]
     .map(([name, v]) => ({ name, per: v.per, tekiryo: v.tekiryo }))
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+}
+
+// 1日（1人前）の栄養合計＝おかず（主食グラム未登録分は含まれない）。要件1
+export interface DailyNutrition {
+  kcal: number
+  protein: number
+  fat: number
+  carb: number
+  salt: number
+  itemsWithAmount: number // 分量入力済みの食材延べ数
+  itemsLinked: number // うち成分表に紐付け済み
+  missingNames: string[] // 分量入力済みだが未紐付けの食材名（重複除去）
+}
+export function dailyNutrition(data: DailyMenuFull): DailyNutrition {
+  const t: DailyNutrition = {
+    kcal: 0, protein: 0, fat: 0, carb: 0, salt: 0,
+    itemsWithAmount: 0, itemsLinked: 0, missingNames: [],
+  }
+  const missing = new Set<string>()
+  const add = (items: DayDishItem[]) => {
+    for (const it of items) {
+      if (it.perPerson == null) continue // 適量は栄養計算の対象外
+      t.itemsWithAmount++
+      if (it.hasData) {
+        t.itemsLinked++
+        t.kcal += it.kcal ?? 0
+        t.protein += it.protein ?? 0
+        t.fat += it.fat ?? 0
+        t.carb += it.carb ?? 0
+        t.salt += it.salt ?? 0
+      } else missing.add(it.name)
+    }
+  }
+  for (const m of data.meals) for (const s of m.slots) add(s.items)
+  if (data.snack) add(data.snack.items)
+  t.missingNames = [...missing]
+  return t
 }
 
 // ---------- 番号ピッカー用 ----------
