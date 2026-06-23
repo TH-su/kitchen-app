@@ -16,3 +16,25 @@
     print-color-adjust: exact;
   }
 }
+
+/* 今日の献立 一括印刷: A3横・1日=1ページ（他帳票のA4と競合させない名前付きページ） */
+@media print {
+  @page kondate-a3 {
+    size: A3 landscape;
+    margin: 10mm;
+  }
+  .kondate-page {
+    page: kondate-a3;
+    break-after: page;
+    break-inside: avoid;
+  }
+  .kondate-page:last-child {
+    break-after: auto;
+  }
+  /* 印刷時は画面幅に依存せず必ず3列（朝/昼/夕）にする */
+  .kondate-meals {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
