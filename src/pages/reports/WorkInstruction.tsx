@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
   upsertDailyMenu,
-  aggregateTotals,
-  dailyNutrition,
+  aggregateTotalsScaled,
+  dailyNutritionEx,
+  scaledPerPerson,
+  normalizeGrainG,
+  isStapleColAvailable,
+  STAPLE_DEFAULT_G,
   type DailyMenuFull,
+  type DailyNutritionEx,
   type DaySlot,
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
@@ -14,7 +19,8 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 const numOrNull = (s: string) => (s ? Number(s) : null)
 const BORDER = 'border border-slate-400'
 
-function MealBlock({ label, code, slots, n }: { label: string; code: string | null; slots: DaySlot[]; n: number }) {
+// R=おかず増量倍率。主食・適量・おやつ(R=1渡し)は据置
+function MealBlock({ label, code, slots, n, R }: { label: string; code: string | null; slots: DaySlot[]; n: number; R: number }) {
   return (
     <div className="mb-4 break-inside-avoid">
       <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1">
@@ -37,7 +43,9 @@ function MealBlock({ label, code, slots, n }: { label: string; code: string | nu
           <tbody>
             {slots.map((s) =>
               s.items.length ? (
-                s.items.map((it, i) => (
+                s.items.map((it, i) => {
+                  const sp = scaledPerPerson(it.perPerson, s.slot, R)
+                  return (
                   <tr key={s.slot + i}>
                     {i === 0 && (
                       <td rowSpan={s.items.length} className={`${BORDER} px-2 py-1 align-top font-semibold`}>
@@ -46,10 +54,10 @@ function MealBlock({ label, code, slots, n }: { label: string; code: string | nu
                     )}
                     <td className={`${BORDER} px-2 py-1`}>{it.name}</td>
                     <td className={`${BORDER} px-2 py-1 text-right text-slate-600`}>
-                      {it.perPerson != null ? `${it.perPerson} g` : '適量'}
+                      {sp != null ? `${round1(sp)} g` : '適量'}
                     </td>
                     <td className={`${BORDER} px-2 py-1 text-right font-medium`}>
-                      {it.perPerson != null ? `${round1(it.perPerson * n)} g` : '適量'}
+                      {sp != null ? `${round1(sp * n)} g` : '適量'}
                     </td>
                     {i === 0 && (
                       <td rowSpan={s.items.length} className={`${BORDER} px-2 py-1 align-top text-sm text-slate-600`}>
@@ -57,7 +65,8 @@ function MealBlock({ label, code, slots, n }: { label: string; code: string | nu
                       </td>
                     )}
                   </tr>
-                ))
+                  )
+                })
               ) : (
                 <tr key={s.slot}>
                   <td className={`${BORDER} px-2 py-1 font-semibold`}>{s.name}</td>
@@ -75,8 +84,10 @@ function MealBlock({ label, code, slots, n }: { label: string; code: string | nu
   )
 }
 
-function WorkSheet({ data, n }: { data: DailyMenuFull; n: number }) {
-  const totals = aggregateTotals(data)
+function WorkSheet({ data, n, nx, dirty }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty: boolean }) {
+  const R = nx.scaleFactor
+  const totals = aggregateTotalsScaled(data, R)
+  const scaled = R > 1
   return (
     <div className="text-base">
       <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
@@ -86,20 +97,34 @@ function WorkSheet({ data, n }: { data: DailyMenuFull; n: number }) {
           <span className="font-bold">食数 {n} 人</span>
         </div>
       </div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-3">
         <p className="text-sm text-slate-600">ラウレアハレ厨房{data.note ? `　/　${data.note}` : ''}</p>
-        <button
-          onClick={() => window.print()}
-          className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] print:hidden"
-        >
-          印刷
-        </button>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1 print:hidden">
+              未保存の主食量で表示中・印刷前に「保存して反映」を
+            </span>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] print:hidden"
+          >
+            印刷
+          </button>
+        </div>
       </div>
 
-      <NutritionBar nut={dailyNutrition(data)} />
+      {scaled && (
+        <div className="mb-3 px-3 py-2 rounded border-2 border-emerald-300 bg-emerald-50 text-emerald-900 text-sm font-bold break-inside-avoid">
+          ★ おかずの材料を1,600kcal確保のため <span className="text-lg">×{R.toFixed(2)}倍</span> に自動増量しています
+          <span className="font-normal">（主食・おやつ・適量は据置。下表の「1人分・総量」は増量後の量です）</span>
+        </div>
+      )}
+
+      <NutritionBar nut={nx} />
 
       {data.meals.map((m) => (
-        <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} />
+        <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={R} />
       ))}
       {data.snack && (
         <MealBlock
@@ -107,11 +132,15 @@ function WorkSheet({ data, n }: { data: DailyMenuFull; n: number }) {
           code={data.snackCode}
           slots={[{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]}
           n={n}
+          R={1}
         />
       )}
 
       <div className="mb-2 break-inside-avoid">
-        <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1">食材 総使用量（{n}人分）</h3>
+        <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1">
+          食材 総使用量（{n}人分）
+          {scaled && <span className="text-sm font-normal text-emerald-800">　※おかずは×{R.toFixed(2)}倍 増量済／主食・おやつ・適量は原量</span>}
+        </h3>
         {totals.length === 0 ? (
           <div className="border border-t-0 border-slate-400 px-2 py-1 text-slate-400">食材データなし</div>
         ) : (
@@ -144,8 +173,10 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   const [dn, setDn] = useState('')
   const [snack, setSnack] = useState('')
   const [note, setNote] = useState('')
+  const [grainG, setGrainG] = useState(String(STAPLE_DEFAULT_G)) // 主食量(g/食)・既定160
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [grainNotPersisted, setGrainNotPersisted] = useState(false)
 
   // data → 選択パネル同期（日付 or レコード変化時のみ。編集中の realtime では極力触らない）
   useEffect(() => {
@@ -155,6 +186,7 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
     setDn(data?.dinnerSetId ? String(data.dinnerSetId) : '')
     setSnack(data?.snackDishId ? String(data.snackDishId) : '')
     setNote(data?.note ?? '')
+    setGrainG(String(data?.stapleGrainG ?? STAPLE_DEFAULT_G))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, data?.id])
 
@@ -172,7 +204,9 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
         dinner_set_id: numOrNull(dn),
         snack_dish_id: numOrNull(snack),
         note: note.trim() || null,
+        staple_grain_g: grainG.trim() === '' ? data?.stapleGrainG ?? STAPLE_DEFAULT_G : normalizeGrainG(Number(grainG)),
       })
+      setGrainNotPersisted(!isStapleColAvailable()) // 列欠落フォールバック時は主食量が保存されていない
       reload()
     } catch (e: any) {
       setSaveError(String(e?.message ?? e))
@@ -182,6 +216,12 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   }
 
   const N = data?.meal_count ?? (Number(mealCount) || 1)
+  // 主食量はライブ入力値で再計算（提供量によるエネルギー変動をその場で確認）。保存でDBへ。
+  // 空欄は undefined を渡し、保存済み値(なければ既定160)へフォールバックさせる（Number('')=0 の罠を回避）
+  const grainEmpty = grainG.trim() === ''
+  const grainNum = grainEmpty ? undefined : Number(grainG)
+  const nx = data ? dailyNutritionEx(data, grainNum) : null
+  const dirty = !!data && editable && !grainEmpty && normalizeGrainG(grainNum!) !== data.stapleGrainG
 
   return (
     <div>
@@ -217,6 +257,18 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
                 className="mt-1 block w-24 border rounded px-2 py-2 text-base"
               />
             </label>
+            <label className="text-sm font-medium">
+              主食量(g/食)
+              <input
+                type="number"
+                min="0"
+                step="10"
+                value={grainG}
+                onChange={(e) => setGrainG(e.target.value)}
+                className="mt-1 block w-24 border rounded px-2 py-2 text-base"
+              />
+              <span className="block text-[11px] text-slate-500 font-normal">ご飯1膳の目安。変更でエネルギー再計算</span>
+            </label>
             <label className="text-sm font-medium flex-1 min-w-[12rem]">
               メモ
               <input
@@ -234,6 +286,11 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
             </button>
           </div>
           {saveError && <p className="text-red-600 text-sm mt-2">エラー: {saveError}</p>}
+          {grainNotPersisted && (
+            <p className="text-amber-700 text-sm mt-2">
+              ※この環境では主食量がDBに保存されません（daily_menus への 0004 マイグレーション未適用）。主食量は160g固定で表示されます。
+            </p>
+          )}
         </div>
       )}
 
@@ -243,7 +300,7 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
           {editable ? '上の欄で選んで「保存して反映」してください。' : '（編集にはログインが必要です）'}
         </p>
       ) : (
-        <WorkSheet data={data} n={N} />
+        <WorkSheet data={data} n={N} nx={nx!} dirty={dirty} />
       )}
     </div>
   )

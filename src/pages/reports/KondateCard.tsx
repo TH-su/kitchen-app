@@ -1,5 +1,4 @@
-import { dailyNutrition, type DailyMenuFull } from '../../lib/daily'
-import { NutritionFooter } from '../../components/NutritionBar'
+import type { DailyMenuFull } from '../../lib/daily'
 
 const WD = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -69,8 +68,6 @@ export default function KondateCard({ data }: { data: DailyMenuFull }) {
           </div>
         </div>
       )}
-
-      <NutritionFooter nut={dailyNutrition(data)} />
     </div>
   )
 }
