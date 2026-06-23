@@ -4,11 +4,11 @@ const one = (v: unknown): any => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 
 const RECIPE_SEL = 'dish_ingredients(amount_g, sort_order, ingredients(name))'
 const SET_SEL = `code, category,
-  staple:staple_dish_id(name, ${RECIPE_SEL}),
-  main:main_dish_id(name, ${RECIPE_SEL}),
-  side1:side1_dish_id(name, ${RECIPE_SEL}),
-  side2:side2_dish_id(name, ${RECIPE_SEL}),
-  soup:soup_dish_id(name, ${RECIPE_SEL})`
+  staple:staple_dish_id(name, notes, ${RECIPE_SEL}),
+  main:main_dish_id(name, notes, ${RECIPE_SEL}),
+  side1:side1_dish_id(name, notes, ${RECIPE_SEL}),
+  side2:side2_dish_id(name, notes, ${RECIPE_SEL}),
+  soup:soup_dish_id(name, notes, ${RECIPE_SEL})`
 
 // ---------- 一覧 ----------
 export interface DailyMenuListItem {
@@ -52,6 +52,7 @@ export interface DaySlot {
   slot: string
   label: string
   name: string
+  notes: string | null
   items: DayDishItem[]
 }
 export interface DayMeal {
@@ -71,6 +72,10 @@ export interface DailyMenuFull {
   lunchCode: string | null
   dinnerCode: string | null
   snackCode: string | null
+  breakfastSetId: number | null
+  lunchSetId: number | null
+  dinnerSetId: number | null
+  snackDishId: number | null
 }
 
 const itemsOf = (dish: any): DayDishItem[] =>
@@ -92,7 +97,7 @@ function setToSlots(setObj: any): DaySlot[] {
   for (const [slot, label] of SLOT_LABELS) {
     const d = one(setObj[slot])
     if (!d) continue
-    out.push({ slot, label, name: d.name, items: itemsOf(d) })
+    out.push({ slot, label, name: d.name, notes: d.notes ?? null, items: itemsOf(d) })
   }
   return out
 }
@@ -102,6 +107,7 @@ export async function fetchDailyMenuByDate(date: string): Promise<DailyMenuFull 
     .from('daily_menus')
     .select(
       `id, menu_date, meal_count, note,
+       breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
        breakfast:breakfast_set_id(${SET_SEL}),
        lunch:lunch_set_id(${SET_SEL}),
        dinner:dinner_set_id(${SET_SEL}),
@@ -131,27 +137,57 @@ export async function fetchDailyMenuByDate(date: string): Promise<DailyMenuFull 
     lunchCode: ln?.code ?? null,
     dinnerCode: dn?.code ?? null,
     snackCode: sn?.code ?? null,
+    breakfastSetId: row.breakfast_set_id ?? null,
+    lunchSetId: row.lunch_set_id ?? null,
+    dinnerSetId: row.dinner_set_id ?? null,
+    snackDishId: row.snack_dish_id ?? null,
   }
+}
+
+// 食材ごとの総使用量を集計（全食事＋おやつ横断）
+export interface IngredientTotal {
+  name: string
+  per: number
+  tekiryo: boolean
+}
+export function aggregateTotals(data: DailyMenuFull): IngredientTotal[] {
+  const sum = new Map<string, { per: number; tekiryo: boolean }>()
+  const push = (items: DayDishItem[]) => {
+    for (const it of items) {
+      const cur = sum.get(it.name) ?? { per: 0, tekiryo: false }
+      if (it.perPerson == null) cur.tekiryo = true
+      else cur.per += it.perPerson
+      sum.set(it.name, cur)
+    }
+  }
+  for (const m of data.meals) for (const s of m.slots) push(s.items)
+  if (data.snack) push(data.snack.items)
+  return [...sum.entries()]
+    .map(([name, v]) => ({ name, per: v.per, tekiryo: v.tekiryo }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 }
 
 // ---------- 番号ピッカー用 ----------
 export interface PickItem {
   id: number
   code: string
+  category: string
+  seq_no: number | null
   label: string
 }
 export async function fetchMenuSetPickList(): Promise<PickItem[]> {
   const { data, error } = await supabase
     .from('menu_sets')
-    .select('id, code, staple:staple_dish_id(name), main:main_dish_id(name)')
-    .order('category', { ascending: true })
+    .select('id, code, category, seq_no, staple:staple_dish_id(name), main:main_dish_id(name)')
     .order('seq_no', { ascending: true, nullsFirst: false })
     .limit(2000)
   if (error) throw error
   return (data ?? []).map((r: any) => ({
     id: r.id,
     code: r.code,
-    label: `${r.code} ${[one(r.staple)?.name, one(r.main)?.name].filter(Boolean).join('/')}`,
+    category: r.category,
+    seq_no: r.seq_no,
+    label: `${r.code}　${[one(r.staple)?.name, one(r.main)?.name].filter(Boolean).join(' / ')}`,
   }))
 }
 export async function fetchSnackPickList(): Promise<PickItem[]> {
@@ -163,7 +199,13 @@ export async function fetchSnackPickList(): Promise<PickItem[]> {
     .order('id', { ascending: true })
     .limit(2000)
   if (error) throw error
-  return (data ?? []).map((r: any) => ({ id: r.id, code: r.code, label: `${r.code} ${r.name}` }))
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    code: r.code,
+    category: 'おやつ',
+    seq_no: null,
+    label: `${r.code}　${r.name}`,
+  }))
 }
 
 // ---------- 更新（要ログイン） ----------

@@ -12,6 +12,7 @@ const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVIC
 
 await admin.from('menu_sets').delete().eq('category', 'テスト')
 await admin.from('ingredients').delete().in('name', ['テスト食材A', '__検証食材__'])
+await admin.from('daily_menus').delete().gte('menu_date', '2099-01-01') // テスト日付
 
 const { data, error } = await admin.auth.admin.listUsers()
 if (error) throw error
