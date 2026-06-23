@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import {
   upsertDailyMenu,
   aggregateTotals,
+  dailyNutrition,
   type DailyMenuFull,
   type DaySlot,
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
+import NutritionBar from '../../components/NutritionBar'
 import type { ReportProps } from './types'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -93,6 +95,8 @@ function WorkSheet({ data, n }: { data: DailyMenuFull; n: number }) {
           印刷
         </button>
       </div>
+
+      <NutritionBar nut={dailyNutrition(data)} />
 
       {data.meals.map((m) => (
         <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} />
