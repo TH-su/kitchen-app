@@ -144,6 +144,53 @@ export async function fetchDailyMenuByDate(date: string): Promise<DailyMenuFull 
   }
 }
 
+function rowToFull(row: any): DailyMenuFull {
+  const bf = one(row.breakfast)
+  const ln = one(row.lunch)
+  const dn = one(row.dinner)
+  const sn = one(row.snack)
+  return {
+    id: row.id,
+    menu_date: row.menu_date,
+    meal_count: row.meal_count,
+    note: row.note,
+    meals: [
+      { key: 'breakfast', label: '朝食', code: bf?.code ?? null, slots: setToSlots(bf) },
+      { key: 'lunch', label: '昼食', code: ln?.code ?? null, slots: setToSlots(ln) },
+      { key: 'dinner', label: '夕食', code: dn?.code ?? null, slots: setToSlots(dn) },
+    ],
+    snack: sn ? { name: sn.name, items: itemsOf(sn) } : null,
+    breakfastCode: bf?.code ?? null,
+    lunchCode: ln?.code ?? null,
+    dinnerCode: dn?.code ?? null,
+    snackCode: sn?.code ?? null,
+    breakfastSetId: row.breakfast_set_id ?? null,
+    lunchSetId: row.lunch_set_id ?? null,
+    dinnerSetId: row.dinner_set_id ?? null,
+    snackDishId: row.snack_dish_id ?? null,
+  }
+}
+
+// 期間内の日々の献立をまとめて取得（一括印刷用）
+export async function fetchDailyMenusRange(start: string, end: string): Promise<DailyMenuFull[]> {
+  const { data, error } = await supabase
+    .from('daily_menus')
+    .select(
+      `id, menu_date, meal_count, note,
+       breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
+       breakfast:breakfast_set_id(${SET_SEL}),
+       lunch:lunch_set_id(${SET_SEL}),
+       dinner:dinner_set_id(${SET_SEL}),
+       snack:snack_dish_id(name, code, ${RECIPE_SEL})`
+    )
+    .gte('menu_date', start)
+    .lte('menu_date', end)
+    .order('menu_date', { ascending: true })
+    .limit(370) // 一括ビューの最大列挙(約1年)と整合
+  if (error) throw error
+  return (data ?? []).map(rowToFull)
+}
+
 // 食材ごとの総使用量を集計（全食事＋おやつ横断）
 export interface IngredientTotal {
   name: string
