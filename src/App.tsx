@@ -8,6 +8,7 @@ import DailyMenuListPage from './pages/DailyMenuListPage'
 import DailyMenuPage from './pages/DailyMenuPage'
 import KondateBulkPage from './pages/KondateBulkPage'
 import WorkBulkPage from './pages/WorkBulkPage'
+import SimulatePage from './pages/SimulatePage'
 import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import { useAuth } from './hooks/useAuth'
@@ -36,6 +37,7 @@ function Nav() {
       <Tab to="/days">作業指示書</Tab>
       <Tab to="/work-print">作業指示書印刷</Tab>
       <Tab to="/kondate">献立掲示</Tab>
+      <Tab to="/simulate">シミュ</Tab>
       <Tab to="/snacks">おやつ</Tab>
       <Tab to="/sides">副菜</Tab>
       {editable && <Tab to="/new">＋新規</Tab>}
@@ -72,6 +74,7 @@ function AppShell() {
           <Route path="/day/:date" element={<DailyMenuPage />} />
           <Route path="/kondate" element={<KondateBulkPage />} />
           <Route path="/work-print" element={<WorkBulkPage />} />
+          <Route path="/simulate" element={<SimulatePage />} />
           <Route path="/new" element={<NewMenuSetPage />} />
         </Routes>
       </main>
