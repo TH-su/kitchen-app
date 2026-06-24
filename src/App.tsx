@@ -8,6 +8,7 @@ import DailyMenuListPage from './pages/DailyMenuListPage'
 import DailyMenuPage from './pages/DailyMenuPage'
 import KondateBulkPage from './pages/KondateBulkPage'
 import WorkBulkPage from './pages/WorkBulkPage'
+import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import { useAuth } from './hooks/useAuth'
 
@@ -42,32 +43,46 @@ function Nav() {
   )
 }
 
+// 認証ゲート: ready 待ち→未ログインは LoginPage→ログイン済みのみアプリ本体
+function AppShell() {
+  const { session, ready } = useAuth()
+  if (!ready) {
+    return <div className="min-h-screen bg-slate-100 flex items-center justify-center text-slate-400">読み込み中…</div>
+  }
+  if (!session) {
+    return <LoginPage />
+  }
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <header className="bg-emerald-700 text-white px-4 py-3 shadow print:hidden flex items-center justify-between">
+        <div>
+          <h1 className="text-lg font-bold">厨房メニュー管理</h1>
+          <p className="text-emerald-100 text-xs">ラウレアハレ厨房</p>
+        </div>
+        <LoginBar />
+      </header>
+      <Nav />
+      <main className="p-3 max-w-5xl mx-auto">
+        <Routes>
+          <Route path="/" element={<MenuSetListPage />} />
+          <Route path="/set/:id" element={<MenuSetDetailPage />} />
+          <Route path="/snacks" element={<SimpleListPage type="snack" title="おやつ" />} />
+          <Route path="/sides" element={<SimpleListPage type="side" title="副菜" />} />
+          <Route path="/days" element={<DailyMenuListPage />} />
+          <Route path="/day/:date" element={<DailyMenuPage />} />
+          <Route path="/kondate" element={<KondateBulkPage />} />
+          <Route path="/work-print" element={<WorkBulkPage />} />
+          <Route path="/new" element={<NewMenuSetPage />} />
+        </Routes>
+      </main>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <HashRouter>
-      <div className="min-h-screen bg-slate-50 text-slate-800">
-        <header className="bg-emerald-700 text-white px-4 py-3 shadow print:hidden flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold">厨房メニュー管理</h1>
-            <p className="text-emerald-100 text-xs">ラウレアハレ厨房</p>
-          </div>
-          <LoginBar />
-        </header>
-        <Nav />
-        <main className="p-3 max-w-5xl mx-auto">
-          <Routes>
-            <Route path="/" element={<MenuSetListPage />} />
-            <Route path="/set/:id" element={<MenuSetDetailPage />} />
-            <Route path="/snacks" element={<SimpleListPage type="snack" title="おやつ" />} />
-            <Route path="/sides" element={<SimpleListPage type="side" title="副菜" />} />
-            <Route path="/days" element={<DailyMenuListPage />} />
-            <Route path="/day/:date" element={<DailyMenuPage />} />
-            <Route path="/kondate" element={<KondateBulkPage />} />
-            <Route path="/work-print" element={<WorkBulkPage />} />
-            <Route path="/new" element={<NewMenuSetPage />} />
-          </Routes>
-        </main>
-      </div>
+      <AppShell />
     </HashRouter>
   )
 }
