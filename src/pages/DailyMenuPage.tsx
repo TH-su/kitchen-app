@@ -17,6 +17,22 @@ const TABS = [
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
+const WD = ['日', '月', '火', '水', '木', '金', '土']
+// 'YYYY-MM-DD' を ±n 日（ローカル日付・月跨ぎ対応）
+function shiftDate(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + n)
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${dt.getFullYear()}-${mm}-${dd}`
+}
+function dateLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  const wd = WD[new Date(y, m - 1, d).getDay()]
+  return `${y}/${m}/${d}（${wd}）`
+}
+
 // /day/:date — 1日分の4帳票をサブタブで表示（同一 daily_menus データを共通利用）
 export default function DayLayout() {
   const { date = '' } = useParams()
@@ -57,6 +73,25 @@ export default function DayLayout() {
             {t.label}
           </button>
         ))}
+      </div>
+
+      {/* 日付の前後移動（前日◀ / ▶翌日）。印刷時は非表示 */}
+      <div className="flex items-center justify-center gap-3 mb-3 print:hidden">
+        <button
+          onClick={() => nav(`/day/${shiftDate(date, -1)}`)}
+          className="min-h-[40px] min-w-[44px] px-3 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50"
+          aria-label="前日"
+        >
+          ◀
+        </button>
+        <span className="text-base font-bold text-slate-800 min-w-[8rem] text-center">{dateLabel(date)}</span>
+        <button
+          onClick={() => nav(`/day/${shiftDate(date, 1)}`)}
+          className="min-h-[40px] min-w-[44px] px-3 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50"
+          aria-label="翌日"
+        >
+          ▶
+        </button>
       </div>
       {/* 作業指示書はマウント維持（タブ切替で選択パネルの未保存入力を失わない） */}
       <div className={tab === 'work' ? '' : 'hidden'}>
