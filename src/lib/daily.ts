@@ -375,6 +375,95 @@ export function aggregateTotalsScaled(data: DailyMenuFull, R: number): Ingredien
     .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 }
 
+// ========== Phase E: カロリー・材料量シミュレーション（主食160g固定・目標から逆算） ==========
+export const SIM_STAPLE_G = 160 // 1食の標準主食量（固定値）
+export const SIM_RMAX = 3 // 理想量倍率の上限（非現実値の暴走防止）
+// 食事区分ごとの初期目標kcal（朝400-500/昼600前後/夕600弱/おやつ100-150の目安）
+export const SIM_TARGET_DEFAULTS: Record<string, number> = {
+  breakfast: 450,
+  lunch: 600,
+  dinner: 580,
+  snack: 120,
+}
+
+export interface SimItem {
+  name: string
+  isStaple: boolean
+  current: number | null // 現在の1人前g（適量=null）
+  ideal: number | null // 理想の1人前g（おかず=現在×R、主食=160固定、適量=null）
+}
+export interface MealSim {
+  key: string
+  label: string
+  hasStaple: boolean
+  stapleKcal: number // 主食160g分のkcal（主食スロットがある食事のみ）
+  okazuCurrentKcal: number // おかずの現在kcal（1人前）
+  actualKcal: number // 実カロリー = 主食kcal + おかず現在kcal
+  targetKcal: number
+  scaleFactor: number // R（おかず理想量の倍率）
+  reason: 'ok' | 'no_okazu' | 'staple_exceeds' | 'capped' | 'no_target'
+  partialMissing: boolean // おかずに未紐付け(成分データ無し)食材が混在
+  missingOkazuNames: string[]
+  items: SimItem[]
+}
+
+// 1食分の逆算シミュレーション（表示専用・DBは一切変更しない）。
+// 主食160g固定でそのkcalを差し引き、残りを「おかずの倍率R」で満たす理想量を算出。
+export function simulateMeal(key: string, label: string, slots: DaySlot[], targetKcal: number): MealSim {
+  const stapleSlot = slots.find((s) => isStaple(s.slot))
+  const hasStaple = !!stapleSlot
+  const stapleKcal = hasStaple ? SIM_STAPLE_G * STAPLE_KCAL_PER_G : 0
+
+  // おかず（主食以外）の現在量・kcal。kcalは成分紐付け済み(hasData)のみ積算
+  const okazu: { name: string; current: number | null; hasData: boolean }[] = []
+  let okazuCurrentKcal = 0
+  const missing = new Set<string>()
+  for (const s of slots) {
+    if (isStaple(s.slot)) continue
+    for (const it of s.items) {
+      okazu.push({ name: it.name, current: it.perPerson, hasData: it.hasData })
+      if (it.perPerson != null) {
+        if (it.hasData) okazuCurrentKcal += it.kcal ?? 0
+        else missing.add(it.name) // 分量はあるが成分未紐付け＝kcal不明
+      }
+    }
+  }
+
+  const actualKcal = stapleKcal + okazuCurrentKcal
+  const okazuTarget = targetKcal - stapleKcal
+  let R = 1
+  let reason: MealSim['reason'] = 'ok'
+  if (targetKcal <= 0) {
+    reason = 'no_target' // 目標未入力 → 倍率なし（現状維持）
+  } else if (okazuCurrentKcal <= 0.5) {
+    reason = 'no_okazu' // 増減の土台が無い（おかず未紐付け/0）
+  } else if (okazuTarget <= 0) {
+    R = 0
+    reason = 'staple_exceeds' // 主食160gだけで目標到達/超過 → おかず不要
+  } else {
+    const raw = okazuTarget / okazuCurrentKcal
+    R = Math.min(raw, SIM_RMAX)
+    if (raw > SIM_RMAX) reason = 'capped' // 上限クランプ＝非現実的
+  }
+
+  // 倍率を実際に適用するのは ok / capped のときのみ。未紐付け食材は根拠が無いのでスケールしない
+  const scaleOkazu = reason === 'ok' || reason === 'capped'
+  const items: SimItem[] = []
+  if (stapleSlot) items.push({ name: stapleSlot.name, isStaple: true, current: SIM_STAPLE_G, ideal: SIM_STAPLE_G })
+  for (const it of okazu) {
+    let ideal: number | null
+    if (it.current == null) ideal = null
+    else if (reason === 'staple_exceeds') ideal = 0
+    else if (!scaleOkazu || !it.hasData) ideal = it.current // no_target/no_okazu/未紐付けは現状維持
+    else ideal = Math.max(0, Math.round(it.current * R))
+    items.push({ name: it.name, isStaple: false, current: it.current, ideal })
+  }
+  return {
+    key, label, hasStaple, stapleKcal, okazuCurrentKcal, actualKcal, targetKcal, scaleFactor: R, reason,
+    partialMissing: missing.size > 0, missingOkazuNames: [...missing], items,
+  }
+}
+
 // ---------- 番号ピッカー用 ----------
 export interface PickItem {
   id: number
