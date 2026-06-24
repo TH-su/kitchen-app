@@ -38,3 +38,34 @@
     gap: 1rem;
   }
 }
+
+/* 作業指示書 一括印刷: A4縦・1日=1ページ（既定@page A4を使用）。
+   圧縮は .workinstr-page 配下のみに限定＝単日印刷(作業指示書タブ)のレイアウトには一切影響しない */
+@media print {
+  /* 各日の後で必ず改ページ（翌日は新ページから）。break-inside:avoid は付けない＝
+     食材点数の多い日でも末尾(食材総使用量)が切れず自然分割される。内側ブロック
+     (MealBlock/NutritionBar/総使用量)は個別に break-inside-avoid 済み */
+  .workinstr-page {
+    break-after: page;
+  }
+  .workinstr-page:last-child {
+    break-after: auto;
+  }
+  /* A4縦1枚に収まりやすくするための圧縮 */
+  .workinstr-page,
+  .workinstr-page table {
+    font-size: 11px;
+    line-height: 1.25;
+  }
+  .workinstr-page td,
+  .workinstr-page th {
+    padding-top: 1px;
+    padding-bottom: 1px;
+  }
+  .workinstr-page h2 {
+    font-size: 17px;
+  }
+  .workinstr-page h3 {
+    font-size: 13px;
+  }
+}

@@ -240,6 +240,10 @@ const KCAL_EPS = 0.5
 
 if (!(OKAZU_RMAX >= 1)) throw new Error('OKAZU_RMAX は 1 以上で設定すること')
 
+// 自動増量（1,600kcalへのおかず自動スケール）の有効/無効スイッチ。
+// false = 一時無効化（倍率R=1固定＝素の材料量・素の栄養を表示）。ロジックは残置、true で即復活。
+export const AUTO_SCALE_ENABLED = false
+
 const isStaple = (slot: string) => slot === 'staple'
 export const ceilG = (x: number) => Math.ceil(x)
 
@@ -317,7 +321,9 @@ export function dailyNutritionEx(data: DailyMenuFull, grainGin?: number): DailyN
   let R = 1
   let reachable = true
   let reason: DailyNutritionEx['reason'] = 'ok'
-  if (okazu.kcal <= KCAL_EPS) {
+  if (!AUTO_SCALE_ENABLED) {
+    // 自動増量 一時無効化: 倍率1固定（素の材料量・素の栄養）。R/reachable/reason は既定のまま
+  } else if (okazu.kcal <= KCAL_EPS) {
     // 増量する土台が無い（おかず未紐付け/0/負）
     reachable = total0 >= KCAL_TARGET
     reason = reachable ? 'ok' : 'no_okazu_kcal'

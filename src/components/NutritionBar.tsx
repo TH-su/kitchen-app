@@ -1,4 +1,4 @@
-import { KCAL_TARGET, OKAZU_RMAX, type DailyNutritionEx } from '../lib/daily'
+import { AUTO_SCALE_ENABLED, KCAL_TARGET, OKAZU_RMAX, type DailyNutritionEx } from '../lib/daily'
 
 const r0 = (n: number) => Math.round(n)
 const r1 = (n: number) => Math.round(n * 10) / 10
@@ -28,14 +28,19 @@ export default function NutritionBar({ nut }: { nut: DailyNutritionEx }) {
     <div className="mb-4 border-2 border-slate-300 rounded-lg overflow-hidden break-inside-avoid">
       <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-slate-50 border-b border-slate-300">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm text-slate-600">1日の目安エネルギー（1人分）</span>
+          <span className="text-sm text-slate-600">
+            {AUTO_SCALE_ENABLED ? '1日の目安エネルギー（1人分）' : '1日の栄養（1人分・実材料量）'}
+          </span>
           <span className="text-3xl font-bold text-slate-800">{r0(nut.total)}</span>
           <span className="text-sm text-slate-600">kcal</span>
         </div>
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold ${b.cls}`}>
-          <span className={`inline-block w-2.5 h-2.5 rounded-full ${b.dot}`} aria-hidden />
-          {b.label}
-        </span>
+        {/* 達成/未達バンドは自動増量機能の一部 → 無効時は非表示 */}
+        {AUTO_SCALE_ENABLED && (
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold ${b.cls}`}>
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${b.dot}`} aria-hidden />
+            {b.label}
+          </span>
+        )}
       </div>
 
       <div className="px-3 py-2 text-sm text-slate-700 flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -58,10 +63,10 @@ export default function NutritionBar({ nut }: { nut: DailyNutritionEx }) {
         </span>
       </div>
 
-      {warn && (
+      {AUTO_SCALE_ENABLED && warn && (
         <div className="px-3 py-2 text-xs text-amber-800 bg-amber-50 border-t border-amber-200 font-medium">⚠ {warn}</div>
       )}
-      {scaled && (
+      {AUTO_SCALE_ENABLED && scaled && (
         <div className="px-3 py-2 text-xs text-rose-800 bg-rose-50 border-t border-rose-200 font-medium">
           ⚠ おかずを×{nut.scaleFactor.toFixed(2)}倍に増量＝<span className="font-bold">食塩相当量も約{nut.scaleFactor.toFixed(2)}倍</span>に増えます（おかず塩分 約{r1(nut.salt)}g・減塩が必要な方は要確認）
         </div>

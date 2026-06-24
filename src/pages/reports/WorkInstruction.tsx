@@ -84,7 +84,8 @@ function MealBlock({ label, code, slots, n, R }: { label: string; code: string |
   )
 }
 
-function WorkSheet({ data, n, nx, dirty }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty: boolean }) {
+// bulk=true: 一括印刷ページ用（個別の印刷ボタン・未保存バッジを出さない）
+export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty?: boolean; bulk?: boolean }) {
   const R = nx.scaleFactor
   const totals = aggregateTotalsScaled(data, R)
   const scaled = R > 1
@@ -99,19 +100,21 @@ function WorkSheet({ data, n, nx, dirty }: { data: DailyMenuFull; n: number; nx:
       </div>
       <div className="flex items-center justify-between mb-2 gap-3">
         <p className="text-sm text-slate-600">ラウレアハレ厨房{data.note ? `　/　${data.note}` : ''}</p>
-        <div className="flex items-center gap-2">
-          {dirty && (
-            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1 print:hidden">
-              未保存の主食量で表示中・印刷前に「保存して反映」を
-            </span>
-          )}
-          <button
-            onClick={() => window.print()}
-            className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] print:hidden"
-          >
-            印刷
-          </button>
-        </div>
+        {!bulk && (
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1 print:hidden">
+                未保存の主食量で表示中・印刷前に「保存して反映」を
+              </span>
+            )}
+            <button
+              onClick={() => window.print()}
+              className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] print:hidden"
+            >
+              印刷
+            </button>
+          </div>
+        )}
       </div>
 
       {scaled && (
