@@ -1,4 +1,6 @@
 import type { DailyMenuFull } from '../../lib/daily'
+import menuLeft from '../../assets/menu-left.png'
+import menuRight from '../../assets/menu-right.png'
 
 const WD = ['日', '月', '火', '水', '木', '金', '土']
 
@@ -12,58 +14,52 @@ function reiwaDate(iso: string): string {
   return `令和${r === 1 ? '元' : r}年${m}月${d}日（${wd}）`
 }
 
-const MEAL_STYLE: Record<string, { head: string; emoji: string }> = {
-  breakfast: { head: 'bg-amber-100 text-amber-800', emoji: '🌅' },
-  lunch: { head: 'bg-emerald-100 text-emerald-800', emoji: '🍱' },
-  dinner: { head: 'bg-indigo-100 text-indigo-800', emoji: '🌙' },
+const MEAL_LABEL: Record<string, string> = {
+  breakfast: '朝食',
+  lunch: '昼食',
+  dinner: '夕食',
 }
 
-// 1日分の「今日の献立」掲示カード（柔らかいデザイン・A3横1ページ）
+// 1日分の「今日の献立」掲示カード（白黒・印刷用 / 上部左右に固定イラスト・A3横1ページ）
 export default function KondateCard({ data }: { data: DailyMenuFull }) {
   return (
-    <div className="kondate-page font-maru bg-[#fffaf0] text-slate-700 rounded-[2rem] border-2 border-amber-200 shadow-sm p-6 sm:p-10">
-      <div className="flex items-center justify-between mb-8">
-        <div className="text-5xl select-none" aria-hidden>
-          🍚
+    <div className="kondate-page font-maru bg-white text-black rounded-[2rem] border-[3px] border-black p-6 sm:p-10">
+      {/* ヘッダ: 左右に固定イラスト、中央にタイトル＋日付（日付は自動） */}
+      <div className="flex items-center justify-between gap-3 mb-8 border-b-[3px] border-black pb-5">
+        {/* 左=赤ちゃん(menu-right.png) / 右=三角巾の子(menu-left.png)：元エクセルの配置に合わせる */}
+        <img src={menuRight} alt="" aria-hidden className="h-28 sm:h-40 w-auto select-none" />
+        <div className="text-center flex-1">
+          <h2 className="text-4xl sm:text-6xl font-bold tracking-wider">今日の献立</h2>
+          <p className="text-lg sm:text-2xl mt-2">{reiwaDate(data.menu_date)}</p>
         </div>
-        <div className="text-center">
-          <h2 className="text-4xl sm:text-5xl font-bold text-amber-800 tracking-wider">今日の献立</h2>
-          <p className="text-lg sm:text-xl text-slate-500 mt-2">{reiwaDate(data.menu_date)}</p>
-        </div>
-        <div className="text-5xl select-none" aria-hidden>
-          🧑‍🍳
-        </div>
+        <img src={menuLeft} alt="" aria-hidden className="h-28 sm:h-40 w-auto select-none" />
       </div>
 
       <div className="kondate-meals grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {data.meals.map((m) => {
-          const st = MEAL_STYLE[m.key] ?? MEAL_STYLE.lunch
-          return (
-            <div key={m.key} className="bg-white rounded-3xl border border-amber-100 shadow-sm overflow-hidden">
-              <div className={`text-2xl font-bold py-3 text-center ${st.head}`}>
-                <span className="mr-1">{st.emoji}</span>
-                {m.label}
-              </div>
-              <div className="p-5 text-center min-h-[9rem]">
-                {m.slots.length === 0 ? (
-                  <p className="text-slate-300 text-xl">—</p>
-                ) : (
-                  m.slots.map((s) => (
-                    <p key={s.slot} className="text-2xl sm:text-3xl leading-relaxed py-1.5">
-                      {s.name}
-                    </p>
-                  ))
-                )}
-              </div>
+        {data.meals.map((m) => (
+          <div key={m.key} className="bg-white rounded-2xl border-2 border-black overflow-hidden">
+            <div className="text-2xl font-bold py-3 text-center bg-gray-100 border-b-2 border-black">
+              {MEAL_LABEL[m.key] ?? m.label}
             </div>
-          )
-        })}
+            <div className="p-5 text-center min-h-[9rem]">
+              {m.slots.length === 0 ? (
+                <p className="text-gray-300 text-xl">—</p>
+              ) : (
+                m.slots.map((s) => (
+                  <p key={s.slot} className="text-2xl sm:text-3xl leading-relaxed py-1.5">
+                    {s.name}
+                  </p>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
       {data.snack && (
         <div className="mt-8 flex justify-center">
-          <div className="inline-flex items-center gap-3 bg-amber-100 text-amber-800 rounded-full px-8 py-4 border border-amber-200">
-            <span className="text-2xl font-bold">🍩 ★おやつ★</span>
+          <div className="inline-flex items-center gap-4 rounded-full px-8 py-4 border-2 border-black">
+            <span className="text-2xl font-bold">★おやつ★</span>
             <span className="text-2xl sm:text-3xl font-bold">{data.snack.name}</span>
           </div>
         </div>
