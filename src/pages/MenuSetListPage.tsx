@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { fetchCategories, fetchMenuSets } from '../lib/queries'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
+import { useAuth } from '../hooks/useAuth'
 
 export default function MenuSetListPage() {
   const nav = useNavigate()
+  const { editable } = useAuth()
   const [cats, setCats] = useState<string[]>([])
   const [active, setActive] = useState('')
   const [catError, setCatError] = useState<string | null>(null)
@@ -33,7 +35,7 @@ export default function MenuSetListPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-3">
+      <div className="flex flex-wrap gap-1.5 mb-3 items-center">
         {cats.map((c) => (
           <button
             key={c}
@@ -46,6 +48,28 @@ export default function MenuSetListPage() {
             {c}
           </button>
         ))}
+        {/* ご当地の右：副菜・おやつ・＋新規（カテゴリ絞込ではなく各ページへ移動） */}
+        <span className="mx-1 self-stretch border-l border-slate-300" aria-hidden />
+        <button
+          onClick={() => nav('/sides')}
+          className="inline-flex items-center justify-center px-4 min-h-[44px] rounded-full text-sm font-medium bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+        >
+          副菜
+        </button>
+        <button
+          onClick={() => nav('/snacks')}
+          className="inline-flex items-center justify-center px-4 min-h-[44px] rounded-full text-sm font-medium bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+        >
+          おやつ
+        </button>
+        {editable && (
+          <button
+            onClick={() => nav('/new')}
+            className="inline-flex items-center justify-center px-4 min-h-[44px] rounded-full text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            ＋新規
+          </button>
+        )}
       </div>
       {(catError || error) && <p className="text-red-600 text-sm mb-2">エラー: {catError || error}</p>}
       {loading ? (

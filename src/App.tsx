@@ -30,7 +30,6 @@ function Tab({ to, children }: { to: string; children: ReactNode }) {
 }
 
 function Nav() {
-  const { editable } = useAuth()
   return (
     <nav className="bg-white border-b flex gap-1 px-2 print:hidden">
       <Tab to="/">献立一覧</Tab>
@@ -38,9 +37,6 @@ function Nav() {
       <Tab to="/work-print">作業指示書印刷</Tab>
       <Tab to="/kondate">献立掲示</Tab>
       <Tab to="/simulate">シミュ</Tab>
-      <Tab to="/snacks">おやつ</Tab>
-      <Tab to="/sides">副菜</Tab>
-      {editable && <Tab to="/new">＋新規</Tab>}
     </nav>
   )
 }
