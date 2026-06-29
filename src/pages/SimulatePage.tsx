@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import {
   fetchDailyMenuByDate,
   simulateMeal,
@@ -25,14 +25,14 @@ const REASON_TEXT: Record<MealSim['reason'], string | null> = {
   capped: `おかずを上限${SIM_RMAX}倍にしても目標に届きません。メニューの見直しを推奨します。`,
 }
 
-function MealCard({
+const MealCard = memo(function MealCard({
   sim,
   targetStr,
   onTarget,
 }: {
   sim: MealSim
   targetStr: string
-  onTarget: (v: string) => void
+  onTarget: (key: string, v: string) => void
 }) {
   const diff = sim.actualKcal - sim.targetKcal
   const warn = REASON_TEXT[sim.reason]
@@ -49,7 +49,7 @@ function MealCard({
               min="0"
               step="10"
               value={targetStr}
-              onChange={(e) => onTarget(e.target.value)}
+              onChange={(e) => onTarget(sim.key, e.target.value)}
               className="w-20 border rounded px-2 py-1 text-right"
               aria-label={`${sim.label}の目標カロリー`}
             />
@@ -124,7 +124,7 @@ function MealCard({
       )}
     </div>
   )
-}
+})
 
 // カロリー・材料量 左右比較シミュレーション（表示専用・DB非改変）
 export default function SimulatePage() {
@@ -139,24 +139,29 @@ export default function SimulatePage() {
 
   const { data, loading, error } = useLoader(() => fetchDailyMenuByDate(applied), [applied])
 
-  const sims: MealSim[] = []
-  if (data) {
-    for (const m of data.meals) sims.push(simulateMeal(m.key, m.label, m.slots, Number(targets[m.key]) || 0))
-    if (data.snack) {
-      sims.push(
-        simulateMeal(
-          'snack',
-          'おやつ',
-          [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }],
-          Number(targets.snack) || 0
+  // 日付欄入力など targets/data に無関係な再レンダーで全食事を再計算しないようメモ化
+  const sims = useMemo<MealSim[]>(() => {
+    const arr: MealSim[] = []
+    if (data) {
+      for (const m of data.meals) arr.push(simulateMeal(m.key, m.label, m.slots, Number(targets[m.key]) || 0))
+      if (data.snack) {
+        arr.push(
+          simulateMeal(
+            'snack',
+            'おやつ',
+            [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }],
+            Number(targets.snack) || 0
+          )
         )
-      )
+      }
     }
-  }
+    return arr
+  }, [data, targets])
   const totalActual = sims.reduce((a, s) => a + s.actualKcal, 0)
   const totalTarget = sims.reduce((a, s) => a + s.targetKcal, 0)
 
-  const setTarget = (key: string, v: string) => setTargets((t) => ({ ...t, [key]: v }))
+  // 安定参照にして MealCard の React.memo を有効化（編集中以外のカード再レンダーを抑止）
+  const setTarget = useCallback((key: string, v: string) => setTargets((t) => ({ ...t, [key]: v })), [])
 
   return (
     <div>
@@ -199,7 +204,7 @@ export default function SimulatePage() {
             </div>
           </div>
           {sims.map((s) => (
-            <MealCard key={s.key} sim={s} targetStr={targets[s.key] ?? ''} onTarget={(v) => setTarget(s.key, v)} />
+            <MealCard key={s.key} sim={s} targetStr={targets[s.key] ?? ''} onTarget={setTarget} />
           ))}
         </>
       )}

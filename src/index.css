@@ -63,6 +63,10 @@
   .workinstr-page th {
     padding-top: 1px;
     padding-bottom: 1px;
+    /* 長い品名/食材名がセル外へはみ出して切れるのを防ぐ。
+       折り返しでセルが縦に伸びるだけで、列幅・罫線・改ページ制御は不変 */
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
   .workinstr-page h2 {
     font-size: 17px;

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { fetchDailyMenusRange, dailyNutritionEx } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import { WorkSheet } from './reports/WorkInstruction'
@@ -36,6 +36,8 @@ export default function WorkBulkPage() {
   const items = data ?? []
   const present = new Set(items.map((d) => d.menu_date))
   const missing = enumerateDates(range.s, range.e).filter((d) => !present.has(d))
+  // 各日の栄養計算は data 変化時のみ（日付欄入力などの再レンダーでは再計算しない）
+  const sheets = useMemo(() => (data ?? []).map((d) => ({ d, nx: dailyNutritionEx(d, d.stapleGrainG) })), [data])
 
   return (
     <div>
@@ -88,9 +90,9 @@ export default function WorkBulkPage() {
         error ? null : <p className="text-slate-400">この期間に登録された献立はありません。</p>
       ) : (
         <div>
-          {items.map((d) => (
+          {sheets.map(({ d, nx }) => (
             <div key={d.id} className="workinstr-page">
-              <WorkSheet data={d} n={d.meal_count} nx={dailyNutritionEx(d, d.stapleGrainG)} bulk />
+              <WorkSheet data={d} n={d.meal_count} nx={nx} bulk />
             </div>
           ))}
         </div>
