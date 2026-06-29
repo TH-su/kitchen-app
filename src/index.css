@@ -27,6 +27,8 @@
     page: kondate-a3;
     break-after: page;
     break-inside: avoid;
+    /* 献立表はモノクロ前提。色が混じってもデフォルトで白黒印刷になるよう保険 */
+    filter: grayscale(1);
   }
   .kondate-page:last-child {
     break-after: auto;
