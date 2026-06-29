@@ -25,7 +25,7 @@ export default function KondateCard({ data }: { data: DailyMenuFull }) {
   return (
     <div className="kondate-page font-maru bg-white text-black rounded-[2rem] border-[3px] border-black p-6 sm:p-10">
       {/* ヘッダ: 左右に固定イラスト、中央にタイトル＋日付（日付は自動） */}
-      <div className="flex items-center justify-between gap-3 mb-8 border-b-[3px] border-black pb-5">
+      <div className="kondate-head flex items-center justify-between gap-3 mb-8 border-b-[3px] border-black pb-5">
         {/* 左=赤ちゃん(menu-right.png) / 右=三角巾の子(menu-left.png)：元エクセルの配置に合わせる */}
         <img src={menuRight} alt="" aria-hidden className="h-28 sm:h-40 w-auto select-none" />
         <div className="text-center flex-1">
@@ -41,7 +41,7 @@ export default function KondateCard({ data }: { data: DailyMenuFull }) {
             <div className="text-2xl font-bold py-3 text-center bg-gray-100 border-b-2 border-black">
               {MEAL_LABEL[m.key] ?? m.label}
             </div>
-            <div className="p-5 text-center min-h-[9rem]">
+            <div className="kondate-mealbody p-5 text-center min-h-[9rem]">
               {m.slots.length === 0 ? (
                 <p className="text-gray-300 text-xl">—</p>
               ) : (
@@ -57,7 +57,7 @@ export default function KondateCard({ data }: { data: DailyMenuFull }) {
       </div>
 
       {data.snack && (
-        <div className="mt-8 flex justify-center">
+        <div className="kondate-snack mt-8 flex justify-center">
           <div className="inline-flex items-center gap-4 rounded-full px-8 py-4 border-2 border-black">
             <span className="text-2xl font-bold">★おやつ★</span>
             <span className="text-2xl sm:text-3xl font-bold">{data.snack.name}</span>

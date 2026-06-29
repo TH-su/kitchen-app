@@ -29,15 +29,70 @@
     break-inside: avoid;
     /* 献立表はモノクロ前提。色が混じってもデフォルトで白黒印刷になるよう保険 */
     filter: grayscale(1);
+    /* 1枚を必ずA3横1ページに収める＝印刷可能高さ(297-10*2=277mm)に固定し、
+       中身(ヘッダ/3食/おやつ)を縦に分配してページを使い切る。万一はみ出しても
+       2ページ目へ送らない。全て .kondate-page 配下の @media print 限定＝
+       画面表示・他帳票(作業指示書/検食簿/給食日誌)には一切影響しない */
+    box-sizing: border-box;
+    height: 277mm;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 9mm 13mm; /* p-6/sm:p-10 を印刷向けに調整 */
   }
   .kondate-page:last-child {
     break-after: auto;
   }
-  /* 印刷時は画面幅に依存せず必ず3列（朝/昼/夕）にする */
+  /* ヘッダ（左右イラスト＋タイトル）は固定高 */
+  .kondate-head {
+    flex: 0 0 auto;
+    margin-bottom: 7mm;
+    padding-bottom: 6mm;
+  }
+  .kondate-head img {
+    height: 38mm;
+  }
+  .kondate-head h2 {
+    font-size: 54px;
+  }
+  .kondate-head h2 + p {
+    font-size: 26px; /* 日付 */
+  }
+  /* 3食グリッド: 画面幅に依存せず必ず3列。残り高さを使い切る */
   .kondate-meals {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
+    gap: 10mm;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  /* 各食カードを縦並びにし、本文をカード高さいっぱいに伸ばす */
+  .kondate-meals > div {
+    display: flex;
+    flex-direction: column;
+  }
+  .kondate-meals > div > div:first-child {
+    font-size: 30px; /* 食事見出し（朝食/昼食/夕食） */
+    flex: 0 0 auto;
+  }
+  .kondate-mealbody {
+    flex: 1 1 auto;
+    min-height: 0; /* min-h-[9rem] を解除 */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* 品名をボックス中央に配置 */
+    padding: 6mm;
+  }
+  .kondate-mealbody p {
+    font-size: 30px; /* text-3xl 相当を維持 */
+    line-height: 1.5;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  /* おやつ帯は固定高 */
+  .kondate-snack {
+    flex: 0 0 auto;
+    margin-top: 7mm;
   }
 }
 
