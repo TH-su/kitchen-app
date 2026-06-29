@@ -60,7 +60,8 @@ function AppShell() {
         <LoginBar />
       </header>
       <Nav />
-      <main className="p-3 max-w-5xl mx-auto">
+      {/* 画面は max-w-5xl 中央。印刷時のみ上限解除＝A3献立表を用紙幅いっぱいに（A4帳票は元々用紙幅で頭打ちのため影響なし。paddingは触らずA4帳票を完全保護） */}
+      <main className="p-3 max-w-5xl mx-auto print:max-w-none">
         <Routes>
           <Route path="/" element={<MenuSetListPage />} />
           <Route path="/set/:id" element={<MenuSetDetailPage />} />

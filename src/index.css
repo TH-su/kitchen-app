@@ -21,7 +21,7 @@
 @media print {
   @page kondate-a3 {
     size: A3 landscape;
-    margin: 10mm;
+    margin: 8mm; /* 用紙を最大限使うため余白を圧縮（献立専用の名前付きページのみ。既定A4@pageは不変） */
   }
   .kondate-page {
     page: kondate-a3;
@@ -41,7 +41,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 9mm 13mm; /* p-6/sm:p-10 を印刷向けに調整 */
+    padding: 9mm 10mm; /* 左右を圧縮し用紙幅を活用（縦9mm/横10mm） */
   }
   .kondate-page:last-child {
     break-after: auto;
