@@ -56,10 +56,11 @@
     height: 38mm;
   }
   .kondate-head h2 {
-    font-size: 54px;
+    font-size: 80px;
+    line-height: 1.1; /* font-size拡大時に字面が行ボックスからはみ出し日付に重なるのを防ぐ */
   }
   .kondate-head h2 + p {
-    font-size: 26px; /* 日付 */
+    font-size: 34px; /* 日付 */
   }
   /* 3食グリッド: 画面幅に依存せず必ず3列。残り高さを使い切る */
   .kondate-meals {
@@ -75,7 +76,7 @@
     flex-direction: column;
   }
   .kondate-meals > div > div:first-child {
-    font-size: 30px; /* 食事見出し（朝食/昼食/夕食） */
+    font-size: 36px; /* 食事見出し（朝食/昼食/夕食） */
     flex: 0 0 auto;
   }
   .kondate-mealbody {
@@ -87,8 +88,8 @@
     padding: 6mm;
   }
   .kondate-mealbody p {
-    font-size: 30px; /* text-3xl 相当を維持 */
-    line-height: 1.5;
+    font-size: 44px; /* 用紙幅拡大に合わせ献立名を大きく（実データ61日で溢れ0を確認） */
+    line-height: 1.4;
     padding-top: 3px;
     padding-bottom: 3px;
   }
@@ -96,6 +97,9 @@
   .kondate-snack {
     flex: 0 0 auto;
     margin-top: 7mm;
+  }
+  .kondate-snack span {
+    font-size: 40px; /* ★おやつ★ と品名 */
   }
 }
 
