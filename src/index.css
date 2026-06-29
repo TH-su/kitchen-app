@@ -29,12 +29,15 @@
     break-inside: avoid;
     /* 献立表はモノクロ前提。色が混じってもデフォルトで白黒印刷になるよう保険 */
     filter: grayscale(1);
-    /* 1枚を必ずA3横1ページに収める＝印刷可能高さ(297-10*2=277mm)に固定し、
-       中身(ヘッダ/3食/おやつ)を縦に分配してページを使い切る。万一はみ出しても
-       2ページ目へ送らない。全て .kondate-page 配下の @media print 限定＝
-       画面表示・他帳票(作業指示書/検食簿/給食日誌)には一切影響しない */
+    /* A3横の印刷可能高さは 297-10*2=277mm。ぴったり固定すると丸め/プリンタの
+       ハード余白で2ページ目へあふれるため、安全マージン約22mmを残して 255mm に収める。
+       加えて一括印刷の space-y-6 が付与するカード間の上マージンを印刷時は打ち消し、
+       各日を確実に1ページへ。中身(ヘッダ/3食/おやつ)は flex で縦に分配しページを使い切る。
+       全て .kondate-page 配下の @media print 限定＝画面表示・他帳票(作業指示書/検食簿/給食日誌)は不変 */
     box-sizing: border-box;
-    height: 277mm;
+    /* space-y-6 はTailwindユーティリティで詳細度が高い(0,3,0)ため !important で確実に打ち消す */
+    margin: 0 !important;
+    height: 255mm;
     overflow: hidden;
     display: flex;
     flex-direction: column;
