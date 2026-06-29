@@ -9,7 +9,12 @@ export function useRealtime(tables: string[], onChange: () => void) {
   cb.current = onChange
 
   useEffect(() => {
-    const fire = () => cb.current()
+    // 連続イベント（多端末の一括更新・cascade 等）を 300ms で1回の reload にまとめる
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const fire = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => cb.current(), 300)
+    }
     const ch = supabase.channel('rt-' + tables.join('-'))
     for (const t of tables) {
       ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, fire)
@@ -17,6 +22,7 @@ export function useRealtime(tables: string[], onChange: () => void) {
     ch.subscribe()
     window.addEventListener('focus', fire)
     return () => {
+      if (timer) clearTimeout(timer)
       supabase.removeChannel(ch)
       window.removeEventListener('focus', fire)
     }
