@@ -15,7 +15,9 @@ export default function NewMenuSetPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchCategories().then(setCats).catch(() => {})
+    fetchCategories()
+      .then(setCats)
+      .catch((e) => console.error('カテゴリ候補の読み込みに失敗:', e))
   }, [])
 
   if (!ready) return null

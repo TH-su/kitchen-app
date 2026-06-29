@@ -523,6 +523,7 @@ export async function upsertDailyMenu(input: DailyMenuInput): Promise<number> {
   let res = await run(stapleColAvailable() ? input : rest)
   if (isMissingStapleCol(res.error)) { markStapleMissing(); res = await run(rest) }
   if (res.error) throw res.error
+  if (!res.data) throw new Error('献立の保存に失敗しました（サーバーから予期しない応答）')
   return res.data.id as number
 }
 export async function deleteDailyMenu(id: number) {
