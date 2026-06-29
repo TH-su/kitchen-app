@@ -37,11 +37,27 @@ export async function ensureIngredient(name: string): Promise<number> {
   return data.id
 }
 
-// 料理のレシピ明細を入れ替える（全削除→再投入）
+// 複数食材を1往復でまとめて upsert し、name→id の対応表を返す（N+1回避）
+export async function ensureIngredients(names: string[]): Promise<Map<string, number>> {
+  const uniq = [...new Set(names.map((n) => n.trim()).filter(Boolean))]
+  if (!uniq.length) return new Map()
+  const { data, error } = await supabase
+    .from('ingredients')
+    .upsert(
+      uniq.map((name) => ({ name })),
+      { onConflict: 'name' }
+    )
+    .select('id, name')
+  if (error) throw error
+  return new Map((data ?? []).map((r: any) => [r.name as string, r.id as number]))
+}
+
+// 料理のレシピ明細を入れ替える。
+// データ損失防止: 破壊的な「全削除」は、食材ID解決・挿入データの構築が
+// すべて成功してから最後に実行する（失敗しやすい処理を DELETE より前へ寄せ、
+// 途中失敗で既存レシピを失う窓を最小化する）。
 export async function saveDishRecipe(dishId: number, rows: RecipeRowInput[]) {
-  const { error: delErr } = await supabase.from('dish_ingredients').delete().eq('dish_id', dishId)
-  if (delErr) throw delErr
-  // 同名食材は先勝ちで1行に集約（重複明細・分量二重計上を防ぐ）
+  // 1) 入力を正規化・重複排除（同名食材は先勝ちで1行に集約）。DBに触る前に確定させる
   const seen = new Set<string>()
   const clean = rows
     .map((r) => ({ name: r.name.trim(), amount_g: r.amount_g }))
@@ -50,14 +66,20 @@ export async function saveDishRecipe(dishId: number, rows: RecipeRowInput[]) {
       seen.add(r.name)
       return true
     })
-  if (!clean.length) return
-  const ids = await Promise.all(clean.map((r) => ensureIngredient(r.name)))
-  const insert = clean.map((r, i) => ({
-    dish_id: dishId,
-    ingredient_id: ids[i],
-    amount_g: r.amount_g,
-    sort_order: i,
-  }))
+
+  // 2) 食材IDを1往復で一括解決し、挿入ペイロードを先に構築。
+  //    ここで失敗しても既存レシピは無傷（DELETE 前のため）
+  const idByName = await ensureIngredients(clean.map((r) => r.name))
+  const insert = clean.map((r, i) => {
+    const ingredient_id = idByName.get(r.name)
+    if (ingredient_id == null) throw new Error(`食材「${r.name}」の登録に失敗しました`)
+    return { dish_id: dishId, ingredient_id, amount_g: r.amount_g, sort_order: i }
+  })
+
+  // 3) ここまで成功して初めて既存明細を入れ替える（DELETE → INSERT）
+  const { error: delErr } = await supabase.from('dish_ingredients').delete().eq('dish_id', dishId)
+  if (delErr) throw delErr
+  if (!insert.length) return // 全削除＝レシピを空にする意図（正常系）
   const { error } = await supabase.from('dish_ingredients').insert(insert)
   if (error) throw error
 }

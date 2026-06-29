@@ -63,13 +63,16 @@ export default function MenuSetDetailPage() {
     setModel(toEditModel(data))
     setSaveError(null)
     setEditing(true)
-    fetchAllIngredientNames().then(setNames).catch(() => {})
+    fetchAllIngredientNames()
+      .then(setNames)
+      .catch((e) => console.error('食材名候補の読み込みに失敗:', e))
   }
   const setSlot = (i: number, patch: Partial<EditSlot>) =>
     setModel((m) => m.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
 
   const save = async () => {
     if (!data) return
+    if (saving) return // 二重保存ガード（連打・遅延クリック対策）
     setSaving(true)
     setSaveError(null)
     try {

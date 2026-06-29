@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   upsertDailyMenu,
   aggregateTotalsScaled,
@@ -87,7 +87,8 @@ function MealBlock({ label, code, slots, n, R }: { label: string; code: string |
 // bulk=true: 一括印刷ページ用（個別の印刷ボタン・未保存バッジを出さない）
 export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty?: boolean; bulk?: boolean }) {
   const R = nx.scaleFactor
-  const totals = aggregateTotalsScaled(data, R)
+  // 食材総使用量はWorkSheet再レンダーの度ではなく data / R 変化時のみ再計算
+  const totals = useMemo(() => aggregateTotalsScaled(data, R), [data, R])
   const scaled = R > 1
   return (
     <div className="text-base">
@@ -169,7 +170,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
   )
 }
 
-export default function WorkInstruction({ date, data, reload, editable, pickSets, pickSnacks }: ReportProps) {
+export default function WorkInstruction({ date, data, reload, editable, pickSets, pickSnacks, pickError }: ReportProps) {
   const [mealCount, setMealCount] = useState('30')
   const [bf, setBf] = useState('')
   const [ln, setLn] = useState('')
@@ -194,6 +195,7 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   }, [date, data?.id])
 
   const save = async () => {
+    if (saving) return // 二重保存ガード（連打・遅延クリック対策）
     setSaving(true)
     setSaveError(null)
     try {
@@ -223,13 +225,17 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   // 空欄は undefined を渡し、保存済み値(なければ既定160)へフォールバックさせる（Number('')=0 の罠を回避）
   const grainEmpty = grainG.trim() === ''
   const grainNum = grainEmpty ? undefined : Number(grainG)
-  const nx = data ? dailyNutritionEx(data, grainNum) : null
+  // メモ/食数/選択変更など栄養に無関係な再レンダーで再計算しないよう data / grainNum 依存でメモ化
+  const nx = useMemo(() => (data ? dailyNutritionEx(data, grainNum) : null), [data, grainNum])
   const dirty = !!data && editable && !grainEmpty && normalizeGrainG(grainNum!) !== data.stapleGrainG
 
   return (
     <div>
       {editable && (
         <div className="bg-emerald-50 border border-emerald-200 rounded p-3 mb-4 print:hidden">
+          {pickError && (
+            <p className="text-red-600 text-sm mb-2 bg-red-50 border border-red-200 rounded px-2 py-1">{pickError}</p>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <label className="text-sm font-medium">
               朝食

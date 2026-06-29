@@ -8,4 +8,5 @@ export interface ReportProps {
   editable: boolean
   pickSets: PickItem[]
   pickSnacks: PickItem[]
+  pickError?: string | null // 献立ピッカーの取得失敗メッセージ（作業指示書の編集パネルで表示）
 }

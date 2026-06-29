@@ -21,6 +21,7 @@ const WD = ['日', '月', '火', '水', '木', '金', '土']
 // 'YYYY-MM-DD' を ±n 日（ローカル日付・月跨ぎ対応）
 function shiftDate(iso: string, n: number): string {
   const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso // 不正・空の日付はそのまま返す（前後ナビの破綻を防ぐ）
   const dt = new Date(y, m - 1, d + n)
   const mm = String(dt.getMonth() + 1).padStart(2, '0')
   const dd = String(dt.getDate()).padStart(2, '0')
@@ -43,10 +44,16 @@ export default function DayLayout() {
 
   const [pickSets, setPickSets] = useState<PickItem[]>([])
   const [pickSnacks, setPickSnacks] = useState<PickItem[]>([])
+  const [pickError, setPickError] = useState<string | null>(null)
   useEffect(() => {
     if (!editable) return
-    fetchMenuSetPickList().then(setPickSets).catch(() => {})
-    fetchSnackPickList().then(setPickSnacks).catch(() => {})
+    setPickError(null)
+    const onErr = (e: unknown) => {
+      console.error('献立ピッカーの読み込みに失敗:', e)
+      setPickError('献立リストの読み込みに失敗しました。通信状態を確認のうえ画面を再読込してください。')
+    }
+    fetchMenuSetPickList().then(setPickSets).catch(onErr)
+    fetchSnackPickList().then(setPickSnacks).catch(onErr)
   }, [editable])
 
   const [tab, setTab] = useState<TabKey>('work')
@@ -54,7 +61,7 @@ export default function DayLayout() {
   if (loading && !data) return <p className="text-slate-500">読み込み中…</p>
   if (error) return <p className="text-red-600">エラー: {error}</p>
 
-  const props = { date, data, reload, editable, pickSets, pickSnacks }
+  const props = { date, data, reload, editable, pickSets, pickSnacks, pickError }
 
   return (
     <div>
