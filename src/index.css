@@ -144,20 +144,21 @@
 @media print {
   @page staffweek-a4 {
     size: A4 landscape;
-    margin: 8mm;
+    margin: 6mm; /* 文字最大化のため余白を圧縮（職員確認用の名前付きページのみ・6mmはプリンタ余白内で安全） */
   }
   .staffweek-page {
     page: staffweek-a4;
   }
   .staffweek-page .staffweek-title {
-    font-size: 19px;
+    font-size: 22px;
   }
   .staffweek-page table {
     table-layout: fixed;
     width: 100%;
     border-collapse: collapse;
-    font-size: 13px; /* 全9週で最大169mm(<A4横194mm)・セル横はみ出し0を計測で確認 */
-    line-height: 1.35;
+    /* 食事内容を最大化。main の p-3(6.4mm)込み実消費189mm<印刷可能198mm(余裕9mm)を全9週で計測確認 */
+    font-size: 17px;
+    line-height: 1.15;
   }
   /* 日付列は狭め・4食列は均等 */
   .staffweek-page th:first-child,
@@ -167,7 +168,7 @@
   .staffweek-page th,
   .staffweek-page td {
     border: 1px solid #000;
-    padding: 4px 6px;
+    padding: 2px 6px;
     /* 長い品名でもセルからはみ出さず折り返す */
     overflow-wrap: break-word;
     word-break: break-word;
