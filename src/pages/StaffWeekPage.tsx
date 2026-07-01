@@ -124,13 +124,13 @@ export default function StaffWeekPage() {
               const d = byDate.get(date)
               return (
                 <tr key={date}>
-                  <td className="border border-slate-500 px-2 py-1 text-center font-semibold whitespace-nowrap align-top">
+                  <td className="border border-slate-500 px-2 py-1 text-center font-semibold whitespace-nowrap align-middle">
                     {mdw(date)}
                   </td>
                   {MEALS.map((m) => {
                     const names = namesOf(d, m.key)
                     return (
-                      <td key={m.key} className="border border-slate-500 px-2 py-1 align-top">
+                      <td key={m.key} className="border border-slate-500 px-2 py-1 align-middle">
                         {names.length === 0 ? (
                           <span className="text-slate-300">—</span>
                         ) : (
