@@ -137,3 +137,44 @@
     font-size: 13px;
   }
 }
+
+/* 職員確認用 週間献立: A4横1枚（固有クラス .staffweek-page ＋ 固有 @page staffweek-a4）。
+   既存の A3献立(kondate-a3/.kondate-page)・作業指示書(.workinstr-page)・既定@page とは
+   別セレクタ/別名前付きページのため一切競合しない。追加のみで既存印刷は不変。 */
+@media print {
+  @page staffweek-a4 {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  .staffweek-page {
+    page: staffweek-a4;
+  }
+  .staffweek-page .staffweek-title {
+    font-size: 19px;
+  }
+  .staffweek-page table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px; /* 全9週で最大169mm(<A4横194mm)・セル横はみ出し0を計測で確認 */
+    line-height: 1.35;
+  }
+  /* 日付列は狭め・4食列は均等 */
+  .staffweek-page th:first-child,
+  .staffweek-page td:first-child {
+    width: 11%;
+  }
+  .staffweek-page th,
+  .staffweek-page td {
+    border: 1px solid #000;
+    padding: 4px 6px;
+    /* 長い品名でもセルからはみ出さず折り返す */
+    overflow-wrap: break-word;
+    word-break: break-word;
+    vertical-align: top;
+  }
+  .staffweek-page thead th {
+    text-align: center;
+    background: #e5e7eb;
+  }
+}

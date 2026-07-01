@@ -9,6 +9,7 @@ import DailyMenuPage from './pages/DailyMenuPage'
 import KondateBulkPage from './pages/KondateBulkPage'
 import WorkBulkPage from './pages/WorkBulkPage'
 import SimulatePage from './pages/SimulatePage'
+import StaffWeekPage from './pages/StaffWeekPage'
 import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import { useAuth } from './hooks/useAuth'
@@ -70,6 +71,7 @@ function AppShell() {
           <Route path="/days" element={<DailyMenuListPage />} />
           <Route path="/day/:date" element={<DailyMenuPage />} />
           <Route path="/kondate" element={<KondateBulkPage />} />
+          <Route path="/staff-week" element={<StaffWeekPage />} />
           <Route path="/work-print" element={<WorkBulkPage />} />
           <Route path="/simulate" element={<SimulatePage />} />
           <Route path="/new" element={<NewMenuSetPage />} />
