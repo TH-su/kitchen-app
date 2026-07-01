@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { fetchDailyMenusRange } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import KondateCard from './reports/KondateCard'
@@ -28,6 +29,7 @@ function enumerateDates(s: string, e: string): string[] {
 
 // 期間選択 → 複数日の「今日の献立」を一括表示＆A3横で印刷
 export default function KondateBulkPage() {
+  const nav = useNavigate()
   const [start, setStart] = useState(todayStr())
   const [end, setEnd] = useState(addDays(todayStr(), 7)) // 既定8日分
   const [range, setRange] = useState({ s: start, e: end })
@@ -67,6 +69,12 @@ export default function KondateBulkPage() {
         </button>
         <button onClick={() => window.print()} className="bg-amber-600 text-white text-sm rounded px-4 min-h-[40px]">
           一括印刷（A3横）
+        </button>
+        <button
+          onClick={() => nav('/staff-week')}
+          className="bg-white border border-emerald-600 text-emerald-700 text-sm rounded px-4 min-h-[40px] hover:bg-emerald-50"
+        >
+          職員確認用（週間A4横）
         </button>
         {start > end ? (
           <span className="text-sm text-red-600">開始日は終了日以前にしてください</span>
