@@ -172,7 +172,9 @@
     /* 長い品名でもセルからはみ出さず折り返す */
     overflow-wrap: break-word;
     word-break: break-word;
-    vertical-align: top;
+    /* セル内テキストを上下中央に。table-cellのvertical-alignは行の高さを変えない
+       ＝表の総高(実消費187mm/余裕11mm)は不変でA4横1枚を維持 */
+    vertical-align: middle;
   }
   .staffweek-page thead th {
     text-align: center;
