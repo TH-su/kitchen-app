@@ -31,6 +31,10 @@ export default function WorkBulkPage() {
   const [start, setStart] = useState(todayStr())
   const [end, setEnd] = useState(addDays(todayStr(), 6)) // 既定7日分
   const [range, setRange] = useState({ s: start, e: end })
+  // 矢印: 日付を±1日し、その場で範囲を確定＝即座に再フェッチ（useLoaderのrange依存が発火）
+  const shiftStart = (delta: number) => { const ns = addDays(start, delta); setStart(ns); setRange({ s: ns, e: end }) }
+  const shiftEnd = (delta: number) => { const ne = addDays(end, delta); setEnd(ne); setRange({ s: start, e: ne }) }
+  const ARROW = 'min-h-[40px] px-2 rounded border bg-white text-slate-700 text-sm hover:bg-slate-50'
 
   const { data, loading, error } = useLoader(() => fetchDailyMenusRange(range.s, range.e), [range.s, range.e])
   const items = data ?? []
@@ -44,21 +48,29 @@ export default function WorkBulkPage() {
       <div className="bg-white border rounded p-3 mb-4 flex flex-wrap items-end gap-3 print:hidden">
         <label className="text-sm">
           開始日
-          <input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className="mt-1 block border rounded px-2 py-2 text-sm"
-          />
+          <div className="mt-1 flex items-center gap-1">
+            <button type="button" onClick={() => shiftStart(-1)} className={ARROW} aria-label="開始日 前日">←</button>
+            <input
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="block border rounded px-2 py-2 text-sm"
+            />
+            <button type="button" onClick={() => shiftStart(1)} className={ARROW} aria-label="開始日 翌日">→</button>
+          </div>
         </label>
         <label className="text-sm">
           終了日
-          <input
-            type="date"
-            value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            className="mt-1 block border rounded px-2 py-2 text-sm"
-          />
+          <div className="mt-1 flex items-center gap-1">
+            <button type="button" onClick={() => shiftEnd(-1)} className={ARROW} aria-label="終了日 前日">←</button>
+            <input
+              type="date"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className="block border rounded px-2 py-2 text-sm"
+            />
+            <button type="button" onClick={() => shiftEnd(1)} className={ARROW} aria-label="終了日 翌日">→</button>
+          </div>
         </label>
         <button
           onClick={() => setRange({ s: start, e: end })}
