@@ -356,6 +356,20 @@ export function dailyNutritionEx(data: DailyMenuFull, grainGin?: number): DailyN
   }
 }
 
+// 1食分のエネルギー(kcal・1人分概算)。主食スロットがあれば grainG×STAPLE_KCAL_PER_G を加算し、
+// おかず（主食以外・成分紐付け済み）の kcal を合算。おやつは主食スロットが無いためおやつkcalのみ。
+// dailyNutritionEx と同一基準（自動増量OFF＝R=1）＝各食の合計は1日合計に一致。
+export function mealKcal(slots: DaySlot[], grainG: number): number {
+  let k = 0
+  let hasStaple = false
+  for (const s of slots) {
+    if (isStaple(s.slot)) { hasStaple = true; continue }
+    for (const it of s.items) if (it.hasData && it.perPerson != null) k += it.kcal ?? 0
+  }
+  if (hasStaple) k += normalizeGrainG(grainG) * STAPLE_KCAL_PER_G
+  return k
+}
+
 // 食材別総使用量（倍率適用版）: おかず（食事・主食以外）は×R、主食・おやつは原量
 export function aggregateTotalsScaled(data: DailyMenuFull, R: number): IngredientTotal[] {
   const sum = new Map<string, { per: number; tekiryo: boolean }>()

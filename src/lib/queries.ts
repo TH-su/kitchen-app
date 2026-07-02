@@ -71,6 +71,7 @@ export interface SlotDish {
   dishId: number
   name: string
   items: RecipeItem[]
+  kcal: number // 1人分の合計エネルギー(概算・成分紐付け済み＆分量入力済みのみ)
 }
 export interface MenuSetDetail {
   id: number
@@ -91,18 +92,25 @@ const SLOT_LABELS: [string, string][] = [
 function toSlotDish(slot: string, label: string, v: unknown): SlotDish | null {
   const d = one(v)
   if (!d) return null
-  const items: RecipeItem[] = (d.dish_ingredients ?? [])
+  const raw = d.dish_ingredients ?? []
+  const items: RecipeItem[] = raw
     .map((di: any) => ({
       name: one(di.ingredients)?.name ?? '?',
       amount_g: di.amount_g,
       sort_order: di.sort_order,
     }))
     .sort((a: RecipeItem, b: RecipeItem) => a.sort_order - b.sort_order)
-  return { slot, label, dishId: d.id, name: d.name, items }
+  // 1人分の合計エネルギー(概算・成分紐付け済み＆分量入力済みのみ計上)
+  let kcal = 0
+  for (const di of raw) {
+    const fc = one(one(di.ingredients)?.food_composition)
+    if (di.amount_g != null && fc?.energy_kcal != null) kcal += (di.amount_g / 100) * fc.energy_kcal
+  }
+  return { slot, label, dishId: d.id, name: d.name, items, kcal }
 }
 
 export async function fetchMenuSetDetail(id: number): Promise<MenuSetDetail | null> {
-  const recipe = 'dish_ingredients(amount_g, sort_order, ingredients(name))'
+  const recipe = 'dish_ingredients(amount_g, sort_order, ingredients(name, food_code, food_composition(energy_kcal)))'
   const { data, error } = await supabase
     .from('menu_sets')
     .select(

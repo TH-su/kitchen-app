@@ -203,9 +203,12 @@ export default function MenuSetDetailPage() {
       <div className="space-y-3">
         {data.slots.map((s) => (
           <div key={s.slot} className="bg-white rounded-lg border overflow-hidden break-inside-avoid">
-            <div className="bg-slate-100 border-b border-slate-300 px-3 py-1.5 text-sm font-semibold flex justify-between">
+            <div className="bg-slate-100 border-b border-slate-300 px-3 py-1.5 text-sm font-semibold flex justify-between items-baseline gap-2">
               <span>{s.label}</span>
-              <span className="text-emerald-700">{s.name}</span>
+              <span className="flex items-baseline gap-2">
+                <span className="text-emerald-700">{s.name}</span>
+                {s.kcal > 0 && <span className="text-slate-600 whitespace-nowrap">{Math.round(s.kcal)} kcal</span>}
+              </span>
             </div>
             {s.items.length > 0 ? (
               <table className="w-full text-sm">

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   upsertDailyMenu,
-  aggregateTotalsScaled,
   dailyNutritionEx,
+  mealKcal,
   scaledPerPerson,
   normalizeGrainG,
   isStapleColAvailable,
@@ -12,20 +12,22 @@ import {
   type DaySlot,
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
-import NutritionBar from '../../components/NutritionBar'
 import type { ReportProps } from './types'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 const numOrNull = (s: string) => (s ? Number(s) : null)
 const BORDER = 'border border-slate-400'
 
-// R=おかず増量倍率。主食・適量・おやつ(R=1渡し)は据置
-function MealBlock({ label, code, slots, n, R }: { label: string; code: string | null; slots: DaySlot[]; n: number; R: number }) {
+// R=おかず増量倍率。主食・適量・おやつ(R=1渡し)は据置。kcal=その食の1人分エネルギー
+function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: string | null; slots: DaySlot[]; n: number; R: number; kcal: number }) {
   return (
     <div className="mb-4 break-inside-avoid">
-      <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1">
-        {label}
-        {code ? `（${code}）` : '（未設定）'}
+      <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1 flex items-baseline justify-between gap-2">
+        <span>
+          {label}
+          {code ? `（${code}）` : '（未設定）'}
+        </span>
+        {kcal > 0 && <span className="text-base font-semibold text-slate-700 whitespace-nowrap">{Math.round(kcal)} kcal</span>}
       </h3>
       {slots.length === 0 ? (
         <div className="border border-t-0 border-slate-400 px-2 py-1 text-slate-400">未設定</div>
@@ -87,9 +89,10 @@ function MealBlock({ label, code, slots, n, R }: { label: string; code: string |
 // bulk=true: 一括印刷ページ用（個別の印刷ボタン・未保存バッジを出さない）
 export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty?: boolean; bulk?: boolean }) {
   const R = nx.scaleFactor
-  // 食材総使用量はWorkSheet再レンダーの度ではなく data / R 変化時のみ再計算
-  const totals = useMemo(() => aggregateTotalsScaled(data, R), [data, R])
   const scaled = R > 1
+  const snackSlots: DaySlot[] | null = data.snack
+    ? [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]
+    : null
   return (
     <div className="text-base">
       <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
@@ -125,47 +128,12 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
         </div>
       )}
 
-      <NutritionBar nut={nx} />
-
       {data.meals.map((m) => (
-        <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={R} />
+        <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={R} kcal={mealKcal(m.slots, nx.grainG)} />
       ))}
-      {data.snack && (
-        <MealBlock
-          label="おやつ"
-          code={data.snackCode}
-          slots={[{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]}
-          n={n}
-          R={1}
-        />
+      {snackSlots && (
+        <MealBlock label="おやつ" code={data.snackCode} slots={snackSlots} n={n} R={1} kcal={mealKcal(snackSlots, nx.grainG)} />
       )}
-
-      <div className="mb-2 break-inside-avoid">
-        <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1">
-          食材 総使用量（{n}人分）
-          {scaled && <span className="text-sm font-normal text-emerald-800">　※おかずは×{R.toFixed(2)}倍 増量済／主食・おやつ・適量は原量</span>}
-        </h3>
-        {totals.length === 0 ? (
-          <div className="border border-t-0 border-slate-400 px-2 py-1 text-slate-400">食材データなし</div>
-        ) : (
-          <table className="w-full border-collapse text-base">
-            <tbody>
-              {totals.map((t) => (
-                <tr key={t.name}>
-                  <td className={`${BORDER} px-2 py-1`}>{t.name}</td>
-                  <td className={`${BORDER} px-2 py-1 text-right text-slate-500 text-sm w-28`}>
-                    {t.per > 0 ? `${round1(t.per)} g/人` : ''}
-                    {t.tekiryo ? '（適量含）' : ''}
-                  </td>
-                  <td className={`${BORDER} px-2 py-1 text-right font-medium w-28`}>
-                    {t.per > 0 ? `${round1(t.per * n)} g` : t.tekiryo ? '適量' : ''}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
     </div>
   )
 }
