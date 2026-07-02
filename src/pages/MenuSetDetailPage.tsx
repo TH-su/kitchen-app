@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { fetchMenuSetDetail, fetchAllIngredientNames, fetchIngredientKcalMap, type MenuSetDetail } from '../lib/queries'
+import { fetchMenuSetDetail, fetchAllIngredientNames, fetchIngredientKcalMap, fetchMenuSets, type MenuSetDetail } from '../lib/queries'
 import {
   updateDishName,
   saveDishRecipe,
@@ -9,10 +9,12 @@ import {
   deleteMenuSet,
   type SlotKey,
 } from '../lib/mutations'
+import { simulateMeal, SIM_TARGET_DEFAULTS, type DaySlot, type DayDishItem, type MealSim } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../hooks/useAuth'
 import RecipeEditor, { type EditorRow } from '../components/RecipeEditor'
+import MealSimCard from '../components/MealSimCard'
 
 const SLOTS: { slot: SlotKey; label: string }[] = [
   { slot: 'staple', label: '主食' },
@@ -42,45 +44,6 @@ const toEditModel = (data: MenuSetDetail): EditSlot[] =>
     }
   })
 
-// カロリーシミュレーション・バー（作業用＝印刷では非表示 print:hidden）。
-// total=現在のセット合計kcal, target=目標kcal(編集可)。差分を右端に色＋アイコンで表示。
-function SimBar({ total, target, onTarget }: { total: number; target: number; onTarget: (n: number) => void }) {
-  const diff = Math.round(total - target)
-  const near = Math.abs(diff) <= 20
-  const over = diff > 20
-  const cls = near
-    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-    : over
-      ? 'bg-rose-50 border-rose-300 text-rose-800'
-      : 'bg-sky-50 border-sky-300 text-sky-800'
-  const icon = near ? '✓' : over ? '▲' : '▼'
-  const msg = near ? `目標達成（差 ±${Math.abs(diff)}）` : over ? `＋${diff} kcal オーバー` : `${Math.abs(diff)} kcal 不足`
-  return (
-    <div className="print:hidden mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 bg-white border rounded-lg px-3 py-2">
-      <span className="text-sm text-slate-600">カロリー シミュレーション</span>
-      <span className="text-sm text-slate-700">
-        現在 <span className="text-2xl font-bold text-slate-800">{Math.round(total)}</span> kcal
-      </span>
-      <label className="text-sm text-slate-700 flex items-center gap-1">
-        目標
-        <input
-          type="number"
-          min="0"
-          step="10"
-          value={target}
-          onChange={(e) => onTarget(Number(e.target.value) || 0)}
-          className="w-24 border rounded px-2 py-1 text-sm text-right"
-        />
-        kcal
-      </label>
-      <span className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-bold ${cls}`}>
-        <span aria-hidden>{icon}</span>
-        {msg}
-      </span>
-    </div>
-  )
-}
-
 export default function MenuSetDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -96,30 +59,64 @@ export default function MenuSetDetailPage() {
   const [names, setNames] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [kcalMap, setKcalMap] = useState<Record<string, number>>({}) // 食材名→kcal/100g（編集ライブ計算用）
-  const [target, setTarget] = useState(600) // 目標kcal（カテゴリ別初期値・編集可・保存しない）
+  const [kcalMap, setKcalMap] = useState<Record<string, number>>({}) // 食材名→kcal/100g（シミュのライブ計算用）
+  const [targetStr, setTargetStr] = useState('') // 目標kcal（カテゴリ別初期値・編集可・保存しない）
 
-  // セット切替時にカテゴリ別の初期目標へ（未編集扱いでリセット）。朝食は軽め
+  // 前後メニュー移動: 同カテゴリの一覧(seq_no順)。カテゴリ不変なら再取得されない
+  const { data: siblings } = useLoader(
+    () => (data?.category ? fetchMenuSets(data.category) : Promise.resolve([])),
+    [data?.category]
+  )
+  const sibIds = (siblings ?? []).map((s) => s.id)
+  const curIdx = sibIds.indexOf(Number(id))
+  const prevId = curIdx > 0 ? sibIds[curIdx - 1] : null
+  const nextId = curIdx >= 0 && curIdx < sibIds.length - 1 ? sibIds[curIdx + 1] : null
+
+  // 食材名→kcal/100g はマウント時に取得（表示・編集の両モードでシミュに使用）
   useEffect(() => {
-    if (data) setTarget(data.category === '朝' ? 450 : 600)
+    fetchIngredientKcalMap()
+      .then(setKcalMap)
+      .catch((e) => console.error('カロリー表の読み込みに失敗:', e))
+  }, [])
+
+  // セット切替時にカテゴリ別の初期目標へ（朝食は軽め）
+  useEffect(() => {
+    if (data) setTargetStr(String(data.category === '朝' ? SIM_TARGET_DEFAULTS.breakfast : SIM_TARGET_DEFAULTS.lunch))
   }, [data?.id, data?.category])
 
-  // 表示モードの合計＝保存済みスロットkcalの和
-  const viewTotal = useMemo(() => (data?.slots ?? []).reduce((k, s) => k + (s.kcal || 0), 0), [data])
-  // 編集モードの合計＝編集中モデルからライブ算出（食材名→kcal/100g × 分量）。model/kcalMap 変化時のみ再計算
-  const liveTotal = useMemo(
-    () =>
-      model.reduce(
-        (sum, s) =>
-          sum +
-          s.rows.reduce((k, r) => {
-            const per100 = kcalMap[(r.name || '').trim()]
-            return k + (r.amount_g != null && per100 != null ? (r.amount_g / 100) * per100 : 0)
-          }, 0),
-        0
-      ),
-    [model, kcalMap]
-  )
+  // 「シミュ」タブと同一ロジック: セットのスロットを DaySlot[] に変換し simulateMeal で理想量を逆算。
+  // 表示=保存データ / 編集=編集中モデル（kcalMapで食材kcalを付与）＝編集中もリアルタイム再計算。
+  const sim = useMemo<MealSim | null>(() => {
+    if (!data) return null
+    const src = editing
+      ? model.map((s) => ({ slot: s.slot, label: s.label, name: s.name, items: s.rows }))
+      : data.slots.map((s) => ({ slot: s.slot, label: s.label, name: s.name, items: s.items }))
+    const daySlots: DaySlot[] = src
+      .filter((s) => (s.name || '').trim())
+      .map((s) => ({
+        slot: s.slot,
+        label: s.label,
+        name: s.name,
+        notes: null,
+        items: (s.items || [])
+          .filter((it) => (it.name || '').trim())
+          .map((it): DayDishItem => {
+            const per100 = kcalMap[(it.name || '').trim()]
+            const has = per100 != null
+            return {
+              name: it.name,
+              perPerson: it.amount_g ?? null,
+              kcal: has && it.amount_g != null ? (it.amount_g / 100) * per100 : null,
+              protein: null,
+              fat: null,
+              carb: null,
+              salt: null,
+              hasData: has,
+            }
+          }),
+      }))
+    return simulateMeal('set', data.code, daySlots, Number(targetStr) || 0)
+  }, [editing, model, data, kcalMap, targetStr])
 
   const startEdit = () => {
     if (!data) return
@@ -129,9 +126,6 @@ export default function MenuSetDetailPage() {
     fetchAllIngredientNames()
       .then(setNames)
       .catch((e) => console.error('食材名候補の読み込みに失敗:', e))
-    fetchIngredientKcalMap()
-      .then(setKcalMap)
-      .catch((e) => console.error('カロリー表の読み込みに失敗:', e))
   }
   const setSlot = (i: number, patch: Partial<EditSlot>) =>
     setModel((m) => m.map((s, idx) => (idx === i ? { ...s, ...patch } : s)))
@@ -205,8 +199,8 @@ export default function MenuSetDetailPage() {
           </div>
         </div>
         {saveError && <p className="text-red-600 text-sm mb-2">エラー: {saveError}</p>}
-        <SimBar total={liveTotal} target={target} onTarget={setTarget} />
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-4">
+          <div className="space-y-3">
           {model.map((s, i) => (
             <div key={s.slot} className="bg-white rounded-lg border p-3 space-y-2">
               <div className="flex items-center gap-2">
@@ -225,6 +219,12 @@ export default function MenuSetDetailPage() {
               )}
             </div>
           ))}
+          </div>
+          {sim && (
+            <div className="print:hidden">
+              <MealSimCard sim={sim} targetStr={targetStr} onTarget={(_k, v) => setTargetStr(v)} />
+            </div>
+          )}
         </div>
         <div className="mt-6 border-t pt-3">
           <button onClick={onDelete} className="text-red-600 text-sm min-h-[40px]">
@@ -264,11 +264,31 @@ export default function MenuSetDetailPage() {
       <div className="hidden print:block mb-3 text-sm text-slate-600">
         ラウレアハレ厨房　印刷日: {new Date().toLocaleDateString('ja-JP')}
       </div>
-      <h2 className="text-xl font-bold mb-3">
-        {data.code} <span className="text-sm font-normal text-slate-500">（{data.category}）</span>
-      </h2>
-      <SimBar total={viewTotal} target={target} onTarget={setTarget} />
-      <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          type="button"
+          disabled={prevId == null}
+          onClick={() => prevId != null && nav(`/set/${prevId}`)}
+          className="print:hidden min-h-[40px] min-w-[44px] px-2 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50 disabled:opacity-30"
+          aria-label="前のメニュー"
+        >
+          ←
+        </button>
+        <h2 className="text-xl font-bold">
+          {data.code} <span className="text-sm font-normal text-slate-500">（{data.category}）</span>
+        </h2>
+        <button
+          type="button"
+          disabled={nextId == null}
+          onClick={() => nextId != null && nav(`/set/${nextId}`)}
+          className="print:hidden min-h-[40px] min-w-[44px] px-2 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50 disabled:opacity-30"
+          aria-label="次のメニュー"
+        >
+          →
+        </button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-4 print:block">
+        <div className="space-y-3">
         {data.slots.map((s) => (
           <div key={s.slot} className="bg-white rounded-lg border overflow-hidden break-inside-avoid">
             <div className="bg-slate-100 border-b border-slate-300 px-3 py-1.5 text-sm font-semibold flex justify-between items-baseline gap-2">
@@ -300,6 +320,12 @@ export default function MenuSetDetailPage() {
           <p className="text-slate-400">
             まだ料理が登録されていません。{editable ? '「編集」から追加してください。' : ''}
           </p>
+        )}
+        </div>
+        {sim && (
+          <div className="print:hidden">
+            <MealSimCard sim={sim} targetStr={targetStr} onTarget={(_k, v) => setTargetStr(v)} />
+          </div>
         )}
       </div>
     </div>
