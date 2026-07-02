@@ -159,3 +159,20 @@ export async function fetchAllIngredientNames(): Promise<string[]> {
   if (error) throw error
   return (data ?? []).map((r: any) => r.name as string)
 }
+
+// 食材名 → エネルギー(kcal/100g) のマップ（成分紐付け済みのみ）。編集画面のライブkcal計算用。
+// 計算元は fetchMenuSetDetail の kcal と同一（ingredients→food_code→food_composition）で整合。
+export async function fetchIngredientKcalMap(): Promise<Record<string, number>> {
+  const { data, error } = await supabase
+    .from('ingredients')
+    .select('name, food_composition(energy_kcal)')
+    .not('food_code', 'is', null)
+    .limit(5000)
+  if (error) throw error
+  const map: Record<string, number> = {}
+  for (const r of (data ?? []) as any[]) {
+    const k = one(r.food_composition)?.energy_kcal
+    if (k != null) map[r.name as string] = Number(k)
+  }
+  return map
+}
