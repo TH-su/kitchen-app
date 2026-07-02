@@ -10,6 +10,14 @@ function todayStr() {
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
 }
+function addDays(iso: string, n: number) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + n)
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${dt.getFullYear()}-${mm}-${dd}`
+}
+const ARROW = 'min-h-[40px] px-2 rounded border bg-white text-slate-700 text-sm hover:bg-slate-50'
 
 export default function DailyMenuListPage() {
   const nav = useNavigate()
@@ -23,12 +31,16 @@ export default function DailyMenuListPage() {
       <div className="bg-white border rounded p-3 mb-4 flex flex-wrap items-end gap-2">
         <label className="text-sm">
           日付を選んで開く
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="mt-1 block border rounded px-2 py-2 text-sm"
-          />
+          <div className="mt-1 flex items-center gap-1">
+            <button type="button" onClick={() => setDate((d) => addDays(d, -1))} className={ARROW} aria-label="前日">←</button>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="block border rounded px-2 py-2 text-sm"
+            />
+            <button type="button" onClick={() => setDate((d) => addDays(d, 1))} className={ARROW} aria-label="翌日">→</button>
+          </div>
         </label>
         <button
           onClick={() => date && nav(`/day/${date}`)}
