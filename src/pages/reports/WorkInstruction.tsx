@@ -20,6 +20,8 @@ const BORDER = 'border border-slate-400'
 
 // R=おかず増量倍率。主食・適量・おやつ(R=1渡し)は据置。kcal=その食の1人分エネルギー
 function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: string | null; slots: DaySlot[]; n: number; R: number; kcal: number }) {
+  // 倍率Rが万一 NaN/Infinity でも表に NaN g を出さないよう防御（自動増量再有効化時の保険。現状R=1固定）
+  const safeR = Number.isFinite(R) ? R : 1
   return (
     <div className="mb-4 break-inside-avoid">
       <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1 flex items-baseline justify-between gap-2">
@@ -46,7 +48,7 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
             {slots.map((s) =>
               s.items.length ? (
                 s.items.map((it, i) => {
-                  const sp = scaledPerPerson(it.perPerson, s.slot, R)
+                  const sp = scaledPerPerson(it.perPerson, s.slot, safeR)
                   return (
                   <tr key={s.slot + i}>
                     {i === 0 && (
@@ -188,7 +190,8 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
     }
   }
 
-  const N = data?.meal_count ?? (Number(mealCount) || 1)
+  // 食数は最低1で下限クランプ（DB異常で0/負でも総使用量が全0の不正な作業指示書を出さない）
+  const N = Math.max(1, data?.meal_count ?? (Number(mealCount) || 1))
   // 主食量はライブ入力値で再計算（提供量によるエネルギー変動をその場で確認）。保存でDBへ。
   // 空欄は undefined を渡し、保存済み値(なければ既定160)へフォールバックさせる（Number('')=0 の罠を回避）
   const grainEmpty = grainG.trim() === ''

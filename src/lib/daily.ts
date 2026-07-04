@@ -2,8 +2,11 @@ import { supabase } from './supabase'
 
 const one = (v: unknown): any => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 
+// food_composition はエネルギー(energy_kcal)のみ取得。P/F/C/塩は現在どの画面にも表示されず
+// （NutritionBar は未使用）、一括取得(最大370日×5スロット)で無駄な転送になるため外している。
+// ※将来 NutritionBar 等でマクロ表示を再有効化する際は protein_g, fat_g, carbohydrate_g, salt_g を戻すこと。
 const RECIPE_SEL =
-  'dish_ingredients(amount_g, sort_order, ingredients(name, food_code, food_composition(energy_kcal, protein_g, fat_g, carbohydrate_g, salt_g)))'
+  'dish_ingredients(amount_g, sort_order, ingredients(name, food_code, food_composition(energy_kcal)))'
 const SET_SEL = `code, category,
   staple:staple_dish_id(name, notes, ${RECIPE_SEL}),
   main:main_dish_id(name, notes, ${RECIPE_SEL}),
