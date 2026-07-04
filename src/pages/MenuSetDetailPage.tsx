@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchMenuSetDetail, fetchAllIngredientNames, fetchIngredientKcalMap, fetchMenuSets, type MenuSetDetail } from '../lib/queries'
 import {
@@ -58,6 +58,7 @@ export default function MenuSetDetailPage() {
   const [model, setModel] = useState<EditSlot[]>([])
   const [names, setNames] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false) // state のバッチ更新に依存しない同期的な再入ガード
   const [saveError, setSaveError] = useState<string | null>(null)
   const [kcalMap, setKcalMap] = useState<Record<string, number>>({}) // 食材名→kcal/100g（シミュのライブ計算用）
   const [targetStr, setTargetStr] = useState('') // 目標kcal（カテゴリ別初期値・編集可・保存しない）
@@ -132,7 +133,10 @@ export default function MenuSetDetailPage() {
 
   const save = async () => {
     if (!data) return
-    if (saving) return // 二重保存ガード（連打・遅延クリック対策）
+    // 二重保存ガード（連打・遅延クリック対策）。React18のバッチング下でも確実に弾けるよう
+    // state ではなく ref で同期的に判定する（disabled/saving と二重の保険）
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setSaveError(null)
     try {
@@ -157,6 +161,7 @@ export default function MenuSetDetailPage() {
       setSaveError(String(e?.message ?? e))
     } finally {
       setSaving(false)
+      savingRef.current = false
     }
   }
 
