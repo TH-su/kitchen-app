@@ -1,6 +1,7 @@
 // 検食簿・給食日誌 共通のデュアルレンダー部品。
 // 画面=入力コントロール / 印刷=紙様式どおりの確定値（選択は丸＋太字・未入力は空欄）。
 // 全て Tailwind の print: ユーティリティで完結＝index.css は変更しない。
+import { useId } from 'react'
 import sealHashizume from '../../assets/seal-hashizume.png'
 
 const B = 'border border-slate-400'
@@ -185,11 +186,50 @@ export function SelectField({
   )
 }
 
+// 職員名など「プルダウン候補＋自由記載」を両立する欄（検食者/調理担当者/記録者）。
+// 画面=<input list>＋<datalist>（候補提示しつつ任意入力可）／印刷=SelectFieldと同一の確定値スパン。
+// datalist id は useId で一意化（3食＋間食が同時マウントするため重複idを避ける）。
+export function ComboField({
+  value,
+  onChange,
+  editable,
+  options,
+  width = 'w-40',
+}: {
+  value: string
+  onChange: (v: string) => void
+  editable: boolean
+  options: readonly string[]
+  width?: string
+}) {
+  const listId = useId()
+  return (
+    <>
+      <input
+        type="text"
+        list={listId}
+        value={value}
+        disabled={!editable}
+        onChange={(e) => onChange(e.target.value)}
+        className={`print:hidden border rounded px-2 py-1 text-base ${width} disabled:bg-slate-100`}
+      />
+      <datalist id={listId}>
+        {options.map((o) => (
+          <option key={o} value={o} />
+        ))}
+      </datalist>
+      <span className="hidden print:inline-block align-bottom border-b border-black text-center px-1 min-w-[3rem]">
+        {value || ' '}
+      </span>
+    </>
+  )
+}
+
 // 所見: ワンクリック定型文ボタン（押下で追記・重複ガード）＋「その他」自由記載（FieldArea）
 const NOTE_PRESETS = [
   'ちょうどよい味でした。',
   '具材は食べやすいサイズでした。',
-  '暖かい状態での提供でした。',
+  '温かい状態での提供でした。',
   '問題なし。',
   '気になる点なし。',
 ] as const

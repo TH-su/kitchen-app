@@ -144,6 +144,8 @@ function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
   return out
 }
 
+// 検食者(inspector)は食ごとに規定が異なる（昼=坂本 独立／朝夕=調理担当者に連動）ため kAuto から分離し、
+// applyKenshokuAuto 側で補完する。ここでは共通項目＋調理担当者(佐々木)のみ。
 const kAuto = (time: string): Partial<KenshokuMeal> => ({
   time,
   weather: '晴れ',
@@ -154,7 +156,6 @@ const kAuto = (time: string): Partial<KenshokuMeal> => ({
   freshness: '特によい',
   plating: '特によい',
   foreign: 'なし',
-  inspector: '坂本',
   cook: '佐々木',
 })
 const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
@@ -175,7 +176,13 @@ export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, edita
   const t = nowHHMM()
   let next = saved
   for (const m of MEALS) {
-    if (t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m])) }
+    if (t < MEAL_THRESHOLD[m]) continue
+    let meal = fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m]))
+    // 検食者: 元が未入力の食のみ補完。昼=坂本(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
+    if (isEmpty(next[m].inspector)) {
+      meal = { ...meal, inspector: m === 'lunch' ? '坂本' : meal.cook }
+    }
+    next = { ...next, [m]: meal }
   }
   return next
 }
