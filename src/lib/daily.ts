@@ -14,6 +14,15 @@ const SET_SEL = `code, category,
   side2:side2_dish_id(name, notes, ${RECIPE_SEL}),
   soup:soup_dish_id(name, notes, ${RECIPE_SEL})`
 
+// 軽量版: 皿名のみ（dish_ingredients を取得しない）。献立掲示/職員週間表は品名しか使わないため、
+// 食材ツリー全体の取得・保持を省いてメモリ/転送を大幅に削減する（items は空配列になる）。
+const SET_SEL_LITE = `code, category,
+  staple:staple_dish_id(name),
+  main:main_dish_id(name),
+  side1:side1_dish_id(name),
+  side2:side2_dish_id(name),
+  soup:soup_dish_id(name)`
+
 // ---------- 一覧 ----------
 export interface DailyMenuListItem {
   id: number
@@ -207,6 +216,29 @@ export async function fetchDailyMenusRange(start: string, end: string): Promise<
   if (isMissingStapleCol(res.error)) { markStapleMissing(); res = await run() }
   if (res.error) throw res.error
   return (res.data ?? []).map(rowToFull)
+}
+
+// 期間内の献立を「皿名のみ」で取得（献立掲示 KondateBulkPage / 職員週間表 StaffWeekPage 用）。
+// dish_ingredients も staple_grain_g も取得しない＝列欠落リトライも不要。
+// items は空配列で rowToFull を再利用（両消費者は品名・おやつ名しか使わないため出力は不変）。
+function dailyColsLite(): string {
+  return `id, menu_date, meal_count, note,
+    breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
+    breakfast:breakfast_set_id(${SET_SEL_LITE}),
+    lunch:lunch_set_id(${SET_SEL_LITE}),
+    dinner:dinner_set_id(${SET_SEL_LITE}),
+    snack:snack_dish_id(name, code)`
+}
+export async function fetchDailyMenusRangeLite(start: string, end: string): Promise<DailyMenuFull[]> {
+  const { data, error } = await supabase
+    .from('daily_menus')
+    .select(dailyColsLite())
+    .gte('menu_date', start)
+    .lte('menu_date', end)
+    .order('menu_date', { ascending: true })
+    .limit(370)
+  if (error) throw error
+  return (data ?? []).map(rowToFull)
 }
 
 // 食材ごとの総使用量を集計（全食事＋おやつ横断）

@@ -103,38 +103,30 @@
   }
 }
 
-/* 作業指示書 一括印刷: A4縦・1日=1ページ（既定@page A4を使用）。
-   圧縮は .workinstr-page 配下のみに限定＝単日印刷(作業指示書タブ)のレイアウトには一切影響しない */
+/* 作業指示書 一括印刷: A4縦・1食=1ページ（各ページに日付ヘッダ再掲）。既定@page A4を使用。
+   全ルールは .workinstr-page（一括専用ラッパ・WorkBulkPage のみ）配下＝単日印刷(作業指示書タブ)には一切影響しない */
 @media print {
-  /* 各日の後で必ず改ページ（翌日は新ページから）。break-inside:avoid は付けない＝
-     食材点数の多い日でも末尾(食材総使用量)が切れず自然分割される。内側ブロック
-     (MealBlock/NutritionBar/総使用量)は個別に break-inside-avoid 済み */
+  /* 各日の後で改ページ（日跨ぎ）。最終日は末尾の空白ページを出さない */
   .workinstr-page {
     break-after: page;
   }
   .workinstr-page:last-child {
     break-after: auto;
   }
-  /* A4縦1枚に収まりやすくするための圧縮 */
-  .workinstr-page,
-  .workinstr-page table {
-    font-size: 11px;
-    line-height: 1.25;
+  /* 各食（朝/昼/夕/おやつ）で改ページ＝1食1ページ。各日の最終食は日境界に委ね二重改ページを防ぐ
+     （:last-child でなく :last-of-type ＝将来 .text-base 末尾に別要素が入っても堅牢） */
+  .workinstr-page .workinstr-meal-page {
+    break-after: page;
   }
+  .workinstr-page .workinstr-meal-page:last-of-type {
+    break-after: auto;
+  }
+  /* 長い品名/食材名がセル外へはみ出して切れるのを防ぐ（折り返しで縦に伸びるだけ・列幅/罫線は不変）。
+     1食1ページで余白十分のため文字サイズ圧縮(旧11px)は廃止＝単日と同じ base フォントで表示 */
   .workinstr-page td,
   .workinstr-page th {
-    padding-top: 1px;
-    padding-bottom: 1px;
-    /* 長い品名/食材名がセル外へはみ出して切れるのを防ぐ。
-       折り返しでセルが縦に伸びるだけで、列幅・罫線・改ページ制御は不変 */
     overflow-wrap: break-word;
     word-break: break-word;
-  }
-  .workinstr-page h2 {
-    font-size: 17px;
-  }
-  .workinstr-page h3 {
-    font-size: 13px;
   }
 }
 
@@ -179,5 +171,19 @@
   .staffweek-page thead th {
     text-align: center;
     background: #e5e7eb;
+  }
+}
+
+/* 画面表示のみの描画最適化: 一括ページ（作業指示書/献立掲示）の画面外カードを遅延描画し、
+   広い期間表示時のメモリ/描画負荷を軽減する。@media screen 限定＝印刷(@media print)には
+   一切適用されない（印刷時は screen ルールが無効化され全ページ描画＝出力・改ページは不変）。 */
+@media screen {
+  .workinstr-page {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 1100px;
+  }
+  .kondate-page {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
   }
 }
