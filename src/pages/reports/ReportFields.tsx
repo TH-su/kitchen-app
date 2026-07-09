@@ -147,12 +147,92 @@ export function FieldArea({
   )
 }
 
-// 施設長/調理員の押印枠（入力対象外・画面/印刷共通の静的ボックス）
-export function SealBox({ label }: { label: string }) {
+// プルダウン。画面=<select> / 印刷=確定値（FieldInput と同じ下線スパン）。既定値は空値ファクトリで種付け済み
+export function SelectField({
+  value,
+  onChange,
+  editable,
+  options,
+  width = 'w-40',
+}: {
+  value: string
+  onChange: (v: string) => void
+  editable: boolean
+  options: readonly string[]
+  width?: string
+}) {
+  return (
+    <>
+      <select
+        value={value}
+        disabled={!editable}
+        onChange={(e) => onChange(e.target.value)}
+        className={`print:hidden border rounded px-2 py-1 text-base ${width} disabled:bg-slate-100`}
+      >
+        {value && !options.includes(value) && <option value={value}>{value}</option>}
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      <span className="hidden print:inline-block align-bottom border-b border-black text-center px-1 min-w-[3rem]">
+        {value || ' '}
+      </span>
+    </>
+  )
+}
+
+// 所見: ワンクリック定型文ボタン（押下で追記・重複ガード）＋「その他」自由記載（FieldArea）
+const NOTE_PRESETS = [
+  'ちょうどよい味でした。',
+  '具材は食べやすいサイズでした。',
+  '暖かい状態での提供でした。',
+  '問題なし。',
+  '気になる点なし。',
+] as const
+
+export function NoteField({
+  value,
+  onChange,
+  editable,
+}: {
+  value: string
+  onChange: (v: string) => void
+  editable: boolean
+}) {
+  const append = (t: string) => onChange(value.includes(t) ? value : `${value}${t}`)
+  return (
+    <>
+      {editable && (
+        <div className="flex flex-wrap gap-1 mb-1 print:hidden">
+          {NOTE_PRESETS.map((p) => (
+            <button
+              type="button"
+              key={p}
+              onClick={() => append(p)}
+              className="rounded border border-slate-300 bg-white text-slate-700 px-2 min-h-[36px] text-xs hover:bg-slate-50"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+      {editable && <span className="text-xs text-slate-500 print:hidden">その他</span>}
+      <FieldArea value={value} onChange={onChange} editable={editable} />
+    </>
+  )
+}
+
+// 施設長/調理員の押印枠。stamped かつ src があれば印影画像を表示（時刻計算で stamped を渡す）。画面/印刷共通。
+// ※印影PNG受領後: ここで import して SealBox の src 既定へ設定すると、stamped の枠に自動表示される。
+export function SealBox({ label, stamped = false, src }: { label: string; stamped?: boolean; src?: string }) {
   return (
     <div className="flex flex-col items-center">
       <span className="text-xs text-slate-600">{label}</span>
-      <div className="w-16 h-16 border border-slate-500 rounded" />
+      <div className="w-16 h-16 border border-slate-500 rounded flex items-center justify-center overflow-hidden">
+        {stamped && src && <img src={src} alt="" aria-hidden decoding="async" className="w-14 h-14 object-contain select-none" />}
+      </div>
     </div>
   )
 }

@@ -2,8 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReportProps } from './types'
 import { saveDailyReport } from '../../lib/daily'
 import { reiwaDate } from '../../lib/date'
-import { K_OPTS, emptyKenshoku, mergeKenshoku, type KenshokuRecord, type KenshokuMeal, type KenshokuSnack } from '../../lib/reports'
-import { RadioRow, RadioInline, FieldInput, FieldArea, SealBox } from './ReportFields'
+import {
+  K_OPTS,
+  emptyKenshoku,
+  mergeKenshoku,
+  applyKenshokuAuto,
+  sealAt,
+  type KenshokuRecord,
+  type KenshokuMeal,
+  type KenshokuSnack,
+} from '../../lib/reports'
+import { RadioRow, RadioInline, FieldInput, SelectField, NoteField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
@@ -27,7 +36,7 @@ function KenshokuMealForm({
           <th className={`${B} px-2 py-1 text-left`} colSpan={2}>
             <span className="mr-3">{label}</span>
             <span className="text-sm font-normal">
-              天候 <FieldInput value={v.weather} onChange={(x) => set({ weather: x })} editable={editable} width="w-40" />
+              天候 <SelectField value={v.weather} onChange={(x) => set({ weather: x })} editable={editable} options={K_OPTS.weather} width="w-28" />
             </span>
           </th>
         </tr>
@@ -56,8 +65,8 @@ function KenshokuMealForm({
           <td className={`${B} px-2 py-1 bg-slate-50`}>検食者/担当者/時刻</td>
           <td className={`${B} px-2 py-1`}>
             <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-              <span>検食者 <FieldInput value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} width="w-32" /></span>
-              <span>調理担当者 <FieldInput value={v.cook} onChange={(x) => set({ cook: x })} editable={editable} width="w-32" /></span>
+              <span>検食者 <SelectField value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
+              <span>調理担当者 <SelectField value={v.cook} onChange={(x) => set({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
               <span>検食時間 <FieldInput type="time" value={v.time} onChange={(x) => set({ time: x })} editable={editable} width="w-32" /></span>
             </span>
           </td>
@@ -65,7 +74,7 @@ function KenshokuMealForm({
         <tr>
           <td className={`${B} px-2 py-1 bg-slate-50`}>所見</td>
           <td className={`${B} px-2 py-1`}>
-            <FieldArea value={v.note} onChange={(x) => set({ note: x })} editable={editable} />
+            <NoteField value={v.note} onChange={(x) => set({ note: x })} editable={editable} />
           </td>
         </tr>
       </tbody>
@@ -73,19 +82,19 @@ function KenshokuMealForm({
   )
 }
 
-export default function Kenshoku({ data, editable, reload }: ReportProps) {
+export default function Kenshoku({ data, editable, reload, bulk = false }: ReportProps) {
   const [k, setK] = useState<KenshokuRecord>(emptyKenshoku)
   const loaded = useRef('') // 保存済みスナップショット（dirty 判定用）
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // data → state 同期（日付 or レコード変化時のみ。編集中の realtime では触らない＝WorkInstruction と同型）
+  // data → state 同期＋時間経過の自動反映（当日・空欄のみ）。基準は保存済み saved＝先祖返り不可・冪等。
   useEffect(() => {
-    const init = mergeKenshoku(emptyKenshoku(), data?.kenshoku ?? null)
-    setK(init)
-    loaded.current = JSON.stringify(init)
+    const saved = mergeKenshoku(emptyKenshoku(), data?.kenshoku ?? null)
+    setK(applyKenshokuAuto(saved, data?.menu_date ?? '', editable))
+    loaded.current = JSON.stringify(saved) // 自動反映分は dirty として「未保存」点灯→保存で確定（案B）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.menu_date, data?.id])
+  }, [data?.menu_date, data?.id, editable])
 
   const setMeal = (m: 'breakfast' | 'lunch' | 'dinner', patch: Partial<KenshokuMeal>) =>
     setK((p) => ({ ...p, [m]: { ...p[m], ...patch } }))
@@ -112,6 +121,7 @@ export default function Kenshoku({ data, editable, reload }: ReportProps) {
     const m = data.meals.find((x) => x.key === key)
     return m ? m.slots.map((s) => s.name).join('　') : ''
   }
+  const sealed = sealAt(data.menu_date) // 夕食提供(17:20)経過で施設長印表示（時刻計算・保存しない）
 
   return (
     <div className="text-base">
@@ -121,25 +131,29 @@ export default function Kenshoku({ data, editable, reload }: ReportProps) {
           <span className="text-sm">{reiwaDate(data.menu_date)}</span>
         </div>
         <div className="flex gap-3">
-          <SealBox label="施設長" />
+          <SealBox label="施設長" stamped={sealed} />
           <SealBox label="調理員" />
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 mb-2 print:hidden">
-        {dirty && (
-          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1">未保存・印刷前に保存を</span>
-        )}
-        {editable && (
-          <button onClick={save} disabled={saving} className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] disabled:opacity-50">
-            {saving ? '保存中…' : '保存'}
-          </button>
-        )}
-        <button onClick={() => window.print()} className="bg-slate-600 text-white text-sm rounded px-4 min-h-[40px]">
-          印刷
-        </button>
-      </div>
-      {saveError && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {saveError}</p>}
+      {!bulk && (
+        <>
+          <div className="flex items-center justify-end gap-2 mb-2 print:hidden">
+            {dirty && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1">未保存・印刷前に保存を</span>
+            )}
+            {editable && (
+              <button onClick={save} disabled={saving} className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] disabled:opacity-50">
+                {saving ? '保存中…' : '保存'}
+              </button>
+            )}
+            <button onClick={() => window.print()} className="bg-slate-600 text-white text-sm rounded px-4 min-h-[40px]">
+              印刷
+            </button>
+          </div>
+          {saveError && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {saveError}</p>}
+        </>
+      )}
 
       <KenshokuMealForm label="朝食" dishes={dishesOf('breakfast')} v={k.breakfast} set={(p) => setMeal('breakfast', p)} editable={editable} />
       <KenshokuMealForm label="昼食" dishes={dishesOf('lunch')} v={k.lunch} set={(p) => setMeal('lunch', p)} editable={editable} />
@@ -159,8 +173,8 @@ export default function Kenshoku({ data, editable, reload }: ReportProps) {
               <td className={`${B} px-2 py-1 bg-slate-50`}>検食者/担当者/時刻</td>
               <td className={`${B} px-2 py-1`}>
                 <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                  <span>検食者 <FieldInput value={k.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} width="w-32" /></span>
-                  <span>担当者 <FieldInput value={k.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} width="w-32" /></span>
+                  <span>検食者 <SelectField value={k.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
+                  <span>担当者 <SelectField value={k.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
                   <span>時刻 <FieldInput type="time" value={k.snack.time} onChange={(x) => setSnack({ time: x })} editable={editable} width="w-32" /></span>
                 </span>
               </td>
@@ -168,7 +182,7 @@ export default function Kenshoku({ data, editable, reload }: ReportProps) {
             <tr>
               <td className={`${B} px-2 py-1 bg-slate-50`}>所見</td>
               <td className={`${B} px-2 py-1`}>
-                <FieldArea value={k.snack.note} onChange={(x) => setSnack({ note: x })} editable={editable} />
+                <NoteField value={k.snack.note} onChange={(x) => setSnack({ note: x })} editable={editable} />
               </td>
             </tr>
           </tbody>

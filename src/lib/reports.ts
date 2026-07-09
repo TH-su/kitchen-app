@@ -1,6 +1,7 @@
-// 検食簿・給食日誌の入力値の型・選択肢・空値ファクトリ・後方互換マージ。
+// 検食簿・給食日誌の入力値の型・選択肢・空値ファクトリ・後方互換マージ・時間経過の自動反映。
 // 保存先は daily_menus.kenshoku / daily_menus.nisshi（jsonb・様式まるごと1オブジェクト）。
 // 数値も string 保持（入力中間状態を許容。表示も string で往復）。
+import { todayStr, nowHHMM } from './date'
 
 // ---- 選択肢（正典の順序＝画面/印刷の並び順） ----
 export const K_OPTS = {
@@ -11,6 +12,9 @@ export const K_OPTS = {
   temp: ['ちょうどよい', '熱い', '冷たい'],
   plating: ['特によい', 'よい', '悪い'],
   foreign: ['なし', 'あり'],
+  weather: ['晴れ', '曇り', '雨'],
+  inspector: ['坂本', '堤', '橋爪'],
+  cook: ['佐々木', '松岡', '田嶋'],
 } as const
 export const N_LEFT = ['多', '少', '無'] as const // おやつ残食 1F/2F
 
@@ -49,11 +53,10 @@ export interface NisshiMeal {
   tempMain: string // 中心温度 主菜℃
   tempSide: string // 中心温度 副菜℃
   leftover: string // 残食 g
-  special: string // 特別食対応
   inspector: string // 検食者
   doneTime: string // 出来上がり時間 HH:MM
   actualCount: string // 実施人数（予定は data.meal_count 自動）
-  recorder: string // 検食日誌記録者
+  recorder: string // 検食日誌記録者（調理担当者に連動）
 }
 export interface NisshiSnack {
   cook: string
@@ -68,9 +71,9 @@ export interface NisshiRecord {
   snack: NisshiSnack
 }
 
-// ---- 空値ファクトリ（全フィールド '' ＝未入力＝印刷空欄） ----
+// ---- 空値ファクトリ（未入力は '' ＝印刷空欄。天候/検食者/調理担当者は既定値を種付け） ----
 export const emptyKMeal = (): KenshokuMeal => ({
-  weather: '',
+  weather: '晴れ',
   staple: '',
   taste: '',
   amount: '',
@@ -79,8 +82,8 @@ export const emptyKMeal = (): KenshokuMeal => ({
   plating: '',
   foreign: '',
   foreignNote: '',
-  inspector: '',
-  cook: '',
+  inspector: '坂本',
+  cook: '佐々木',
   time: '',
   note: '',
 })
@@ -88,28 +91,27 @@ export const emptyKenshoku = (): KenshokuRecord => ({
   breakfast: emptyKMeal(),
   lunch: emptyKMeal(),
   dinner: emptyKMeal(),
-  snack: { inspector: '', cook: '', time: '', note: '' },
+  snack: { inspector: '坂本', cook: '佐々木', time: '', note: '' },
 })
 
 export const emptyNMeal = (): NisshiMeal => ({
-  cook: '',
+  cook: '佐々木',
   tempMain: '',
   tempSide: '',
   leftover: '',
-  special: '',
-  inspector: '',
+  inspector: '坂本',
   doneTime: '',
   actualCount: '',
-  recorder: '',
+  recorder: '佐々木',
 })
 export const emptyNisshi = (): NisshiRecord => ({
   breakfast: emptyNMeal(),
   lunch: emptyNMeal(),
   dinner: emptyNMeal(),
-  snack: { cook: '', inspector: '', left1F: '', left2F: '' },
+  snack: { cook: '佐々木', inspector: '坂本', left1F: '', left2F: '' },
 })
 
-// ---- 後方互換マージ（保存JSONに欠けキーがあっても空値で補完＝様式追加に強い） ----
+// ---- 後方互換マージ（保存JSONに欠けキーがあっても既定/空で補完＝様式追加に強い） ----
 export const mergeKenshoku = (base: KenshokuRecord, saved: any): KenshokuRecord => ({
   breakfast: { ...base.breakfast, ...(saved?.breakfast ?? {}) },
   lunch: { ...base.lunch, ...(saved?.lunch ?? {}) },
@@ -122,3 +124,73 @@ export const mergeNisshi = (base: NisshiRecord, saved: any): NisshiRecord => ({
   dinner: { ...base.dinner, ...(saved?.dinner ?? {}) },
   snack: { ...base.snack, ...(saved?.snack ?? {}) },
 })
+
+// ================= 時間経過による自動反映（当日のみ・未入力欄のみ・先祖返り不可） =================
+export const MEAL_THRESHOLD: Record<'breakfast' | 'lunch' | 'dinner', string> = {
+  breakfast: '07:50',
+  lunch: '11:50',
+  dinner: '17:20',
+}
+
+// 空判定は '' と null/undefined のみ（'0'＝温度/残食0は入力済み扱いで保護）
+const isEmpty = (v: unknown): boolean => v === '' || v == null
+// base の空フィールドにのみ auto を入れる。非空値は絶対に触らない（＝手動保存値は不可侵）
+function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
+  const out = { ...base }
+  for (const key in auto) {
+    if (isEmpty((out as any)[key])) (out as any)[key] = auto[key]
+  }
+  return out
+}
+
+const kAuto = (time: string): Partial<KenshokuMeal> => ({
+  time,
+  staple: 'ちょうどよい',
+  taste: 'ちょうどよい',
+  temp: 'ちょうどよい',
+  amount: 'よい',
+  freshness: '特によい',
+  plating: '特によい',
+  foreign: 'なし',
+  inspector: '坂本',
+  cook: '佐々木',
+})
+const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
+  doneTime,
+  tempMain: '90',
+  tempSide: '90',
+  inspector: '坂本',
+  cook: '佐々木',
+  recorder: '佐々木',
+})
+
+const MEALS = ['breakfast', 'lunch', 'dinner'] as const
+
+// editable かつ menuDate＝当日 かつ 現在時刻がしきい値を過ぎた食の「未入力欄のみ」自動反映。
+// 判定基準は保存済み saved＝冪等・手動保存値は不可侵（先祖返り防止）。
+export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, editable: boolean): KenshokuRecord {
+  if (!editable || menuDate !== todayStr()) return saved
+  const t = nowHHMM()
+  let next = saved
+  for (const m of MEALS) {
+    if (t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m])) }
+  }
+  return next
+}
+export function applyNisshiAuto(saved: NisshiRecord, menuDate: string, editable: boolean): NisshiRecord {
+  if (!editable || menuDate !== todayStr()) return saved
+  const t = nowHHMM()
+  let next = saved
+  for (const m of MEALS) {
+    if (t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m])) }
+  }
+  return next
+}
+
+// 施設長 押印の表示判定（時刻計算のみ・保存しない）。夕食提供(17:20)経過で当日押印、過去日は常時、未来日は無し。
+export function sealAt(menuDate: string): boolean {
+  const today = todayStr()
+  if (menuDate < today) return true
+  if (menuDate > today) return false
+  return nowHHMM() >= MEAL_THRESHOLD.dinner
+}

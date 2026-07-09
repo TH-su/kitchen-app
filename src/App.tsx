@@ -8,6 +8,8 @@ import DailyMenuListPage from './pages/DailyMenuListPage'
 import DailyMenuPage from './pages/DailyMenuPage'
 import KondateBulkPage from './pages/KondateBulkPage'
 import WorkBulkPage from './pages/WorkBulkPage'
+import KenshokuBulkPage from './pages/KenshokuBulkPage'
+import NisshiBulkPage from './pages/NisshiBulkPage'
 import SimulatePage from './pages/SimulatePage'
 import StaffWeekPage from './pages/StaffWeekPage'
 import LoginPage from './pages/LoginPage'
@@ -37,6 +39,8 @@ function Nav() {
       <Tab to="/">献立一覧</Tab>
       <Tab to="/days">作業指示書</Tab>
       <Tab to="/work-print">作業指示書印刷</Tab>
+      <Tab to="/kenshoku-print">検食簿</Tab>
+      <Tab to="/nisshi-print">給食日誌</Tab>
       <Tab to="/kondate">献立掲示</Tab>
       <Tab to="/simulate">シミュ</Tab>
     </nav>
@@ -78,6 +82,8 @@ function AppShell() {
             <Route path="/kondate" element={<KondateBulkPage />} />
             <Route path="/staff-week" element={<StaffWeekPage />} />
             <Route path="/work-print" element={<WorkBulkPage />} />
+            <Route path="/kenshoku-print" element={<KenshokuBulkPage />} />
+            <Route path="/nisshi-print" element={<NisshiBulkPage />} />
             <Route path="/simulate" element={<SimulatePage />} />
             <Route path="/new" element={<NewMenuSetPage />} />
           </Routes>

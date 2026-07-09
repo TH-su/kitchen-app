@@ -187,3 +187,27 @@
     contain-intrinsic-size: auto 900px;
   }
 }
+
+/* 検食簿/給食日誌 一括印刷: 既定@page A4を使用（名前付きページを作らない）。1日=1様式で改ページ。
+   固有クラス .kenshoku-page/.nisshi-page のみ＝A3献立/作業指示書/週間表/既定@pageに一切干渉しない。 */
+@media print {
+  .kenshoku-page {
+    break-after: page;
+  }
+  .kenshoku-page:last-child {
+    break-after: auto;
+  }
+  .nisshi-page {
+    break-after: page;
+  }
+  .nisshi-page:last-child {
+    break-after: auto;
+  }
+}
+@media screen {
+  .kenshoku-page,
+  .nisshi-page {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 1100px;
+  }
+}

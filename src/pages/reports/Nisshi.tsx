@@ -2,24 +2,34 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReportProps } from './types'
 import { saveDailyReport } from '../../lib/daily'
 import { reiwaDate } from '../../lib/date'
-import { N_LEFT, emptyNisshi, mergeNisshi, type NisshiRecord, type NisshiMeal, type NisshiSnack } from '../../lib/reports'
-import { RadioInline, FieldInput, SealBox } from './ReportFields'
+import {
+  K_OPTS,
+  N_LEFT,
+  emptyNisshi,
+  mergeNisshi,
+  applyNisshiAuto,
+  sealAt,
+  type NisshiRecord,
+  type NisshiMeal,
+  type NisshiSnack,
+} from '../../lib/reports'
+import { RadioInline, FieldInput, SelectField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
-export default function Nisshi({ data, editable, reload }: ReportProps) {
+export default function Nisshi({ data, editable, reload, bulk = false }: ReportProps) {
   const [nz, setNz] = useState<NisshiRecord>(emptyNisshi)
   const loaded = useRef('') // 保存済みスナップショット（dirty 判定用）
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // data → state 同期（日付 or レコード変化時のみ。編集中の realtime では触らない＝WorkInstruction と同型）
+  // data → state 同期＋時間経過の自動反映（当日・空欄のみ）。基準は保存済み saved＝先祖返り不可・冪等。
   useEffect(() => {
-    const init = mergeNisshi(emptyNisshi(), data?.nisshi ?? null)
-    setNz(init)
-    loaded.current = JSON.stringify(init)
+    const saved = mergeNisshi(emptyNisshi(), data?.nisshi ?? null)
+    setNz(applyNisshiAuto(saved, data?.menu_date ?? '', editable))
+    loaded.current = JSON.stringify(saved)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.menu_date, data?.id])
+  }, [data?.menu_date, data?.id, editable])
 
   const setMeal = (m: 'breakfast' | 'lunch' | 'dinner', patch: Partial<NisshiMeal>) =>
     setNz((p) => ({ ...p, [m]: { ...p[m], ...patch } }))
@@ -42,6 +52,7 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
   }
 
   if (!data) return <p className="text-slate-500">この日の献立は未設定です。</p>
+  const sealed = sealAt(data.menu_date) // 夕食提供(17:20)経過で施設長印表示（時刻計算・保存しない）
 
   return (
     <div className="text-base">
@@ -53,25 +64,29 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
           </span>
         </div>
         <div className="flex gap-3">
-          <SealBox label="施設長" />
+          <SealBox label="施設長" stamped={sealed} />
           <SealBox label="調理員" />
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2 mb-2 print:hidden">
-        {dirty && (
-          <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1">未保存・印刷前に保存を</span>
-        )}
-        {editable && (
-          <button onClick={save} disabled={saving} className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] disabled:opacity-50">
-            {saving ? '保存中…' : '保存'}
-          </button>
-        )}
-        <button onClick={() => window.print()} className="bg-slate-600 text-white text-sm rounded px-4 min-h-[40px]">
-          印刷
-        </button>
-      </div>
-      {saveError && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {saveError}</p>}
+      {!bulk && (
+        <>
+          <div className="flex items-center justify-end gap-2 mb-2 print:hidden">
+            {dirty && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-300 rounded px-2 py-1">未保存・印刷前に保存を</span>
+            )}
+            {editable && (
+              <button onClick={save} disabled={saving} className="bg-emerald-600 text-white text-sm rounded px-4 min-h-[40px] disabled:opacity-50">
+                {saving ? '保存中…' : '保存'}
+              </button>
+            )}
+            <button onClick={() => window.print()} className="bg-slate-600 text-white text-sm rounded px-4 min-h-[40px]">
+              印刷
+            </button>
+          </div>
+          {saveError && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {saveError}</p>}
+        </>
+      )}
 
       {data.meals.map((m) => {
         const key = m.key as 'breakfast' | 'lunch' | 'dinner'
@@ -89,7 +104,8 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
                 <td className={`${B} px-2 py-1 align-top text-sm`}>
                   調理担当者
                   <br />
-                  <FieldInput value={v.cook} onChange={(x) => setMeal(key, { cook: x })} editable={editable} width="w-24" />
+                  {/* 調理担当者を変えると検食日誌記録者も連動 */}
+                  <SelectField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
                 </td>
                 <td className={`${B} px-2 py-1`}>{m.slots.length ? m.slots.map((s) => s.name).join('／') : '未設定'}</td>
                 <td className={`${B} px-2 py-1 text-sm whitespace-nowrap`}>
@@ -104,9 +120,8 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
               <tr>
                 <td className={`${B} px-2 py-1 text-sm`} colSpan={2}>
                   <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                    <span>検食者 <FieldInput value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} width="w-28" /></span>
+                    <span>検食者 <SelectField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" /></span>
                     <span>出来上がり <FieldInput type="time" value={v.doneTime} onChange={(x) => setMeal(key, { doneTime: x })} editable={editable} width="w-28" /></span>
-                    <span>特別食対応 <FieldInput value={v.special} onChange={(x) => setMeal(key, { special: x })} editable={editable} width="w-28" /></span>
                   </span>
                 </td>
                 <td className={`${B} px-2 py-1 text-sm`} colSpan={2}>
@@ -115,7 +130,7 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
                       予定 {data.meal_count} 人 ／ 実施{' '}
                       <FieldInput type="number" value={v.actualCount} onChange={(x) => setMeal(key, { actualCount: x })} editable={editable} width="w-16" suffix="人" />
                     </span>
-                    <span>検食日誌記録者 <FieldInput value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} width="w-28" /></span>
+                    <span>検食日誌記録者 <SelectField value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" /></span>
                   </span>
                 </td>
               </tr>
@@ -134,9 +149,9 @@ export default function Nisshi({ data, editable, reload }: ReportProps) {
             </tr>
             <tr>
               <td className={`${B} px-2 py-1 text-sm`}>
-                調理担当者 <FieldInput value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} width="w-24" />
+                調理担当者 <SelectField value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
                 <br />
-                検食者 <FieldInput value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} width="w-24" />
+                検食者 <SelectField value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" />
               </td>
               <td className={`${B} px-2 py-1`}>{data.snack.name}</td>
               <td className={`${B} px-2 py-1 text-sm`}>
