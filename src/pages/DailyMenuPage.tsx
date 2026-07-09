@@ -104,8 +104,13 @@ export default function DayLayout() {
       <div className={tab === 'work' ? '' : 'hidden'}>
         <WorkInstruction {...props} />
       </div>
-      {tab === 'kenshoku' && <Kenshoku {...props} />}
-      {tab === 'nisshi' && <Nisshi {...props} />}
+      {/* 検食簿・給食日誌は入力を持つためマウント維持（タブ切替で未保存入力を失わない） */}
+      <div className={tab === 'kenshoku' ? '' : 'hidden'}>
+        <Kenshoku {...props} />
+      </div>
+      <div className={tab === 'nisshi' ? '' : 'hidden'}>
+        <Nisshi {...props} />
+      </div>
       {tab === 'kondate' && <Kondate {...props} />}
     </div>
   )
