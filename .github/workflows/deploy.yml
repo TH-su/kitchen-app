@@ -32,6 +32,9 @@ jobs:
           # Supabase 接続情報（リポジトリの Secrets に登録しておくこと）
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+　　　　　　VITE_FACILITY_NAME: ${{ vars.VITE_FACILITY_NAME }}
+          VITE_REPORT_INSPECTORS: ${{ vars.VITE_REPORT_INSPECTORS }}
+          VITE_REPORT_COOKS: ${{ vars.VITE_REPORT_COOKS }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
