@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchDailyMenusRange } from '../lib/daily'
+import { fetchDailyMenusRangeLite } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import KondateCard from './reports/KondateCard'
 
@@ -34,10 +34,13 @@ export default function KondateBulkPage() {
   const [end, setEnd] = useState(addDays(todayStr(), 7)) // 既定8日分
   const [range, setRange] = useState({ s: start, e: end })
 
-  const { data, loading, error } = useLoader(() => fetchDailyMenusRange(range.s, range.e), [range.s, range.e])
+  // 献立掲示は品名しか使わないため軽量フェッチ（食材ツリーを取得しない＝メモリ削減）
+  const { data, loading, error } = useLoader(() => fetchDailyMenusRangeLite(range.s, range.e), [range.s, range.e])
   const items = data ?? []
+  const allDates = enumerateDates(range.s, range.e)
   const present = new Set(items.map((d) => d.menu_date))
-  const missing = enumerateDates(range.s, range.e).filter((d) => !present.has(d))
+  const missing = allDates.filter((d) => !present.has(d))
+  const rangeDays = allDates.length
 
   return (
     <div>
@@ -85,6 +88,11 @@ export default function KondateBulkPage() {
         )}
       </div>
 
+      {rangeDays > 31 && (
+        <p className="text-amber-700 text-sm mb-3 print:hidden bg-amber-50 border border-amber-200 rounded px-3 py-2">
+          ⚠ {rangeDays}日分を一度に表示・印刷します。動作が重くなる場合は期間を分けて印刷してください。
+        </p>
+      )}
       {error && <p className="text-red-600 text-sm">エラー: {error}</p>}
       {missing.length > 0 && (
         <p className="text-amber-600 text-sm mb-3 print:hidden">未設定の日（印刷されません）: {missing.join('、')}</p>

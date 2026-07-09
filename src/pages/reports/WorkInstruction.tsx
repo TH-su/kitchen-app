@@ -95,6 +95,41 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
   const snackSlots: DaySlot[] | null = data.snack
     ? [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]
     : null
+
+  // 一括印刷: 1食=1ページ。各ページ先頭に日付・食数ヘッダを再掲（現場で1枚ずつ配れるように）。
+  // 設定済み（slots のある）食のみページ化＝未設定食で空白ページを出さない。
+  // ※単日（bulk=false）は下の従来描画のまま一切変更しない。
+  if (bulk) {
+    const mealPages = [
+      ...data.meals
+        .filter((m) => m.slots.length > 0)
+        .map((m) => ({ key: m.key, label: m.label, code: m.code, slots: m.slots, R })),
+      ...(snackSlots ? [{ key: 'snack', label: 'おやつ', code: data.snackCode, slots: snackSlots, R: 1 }] : []),
+    ]
+    return (
+      <div className="text-base">
+        {mealPages.map((m) => (
+          <div key={m.key} className="workinstr-meal-page">
+            {/* 各ページ共通ヘッダ（日付・食数）。ヘッダ自身が途中で割れないよう avoid */}
+            <div className="break-inside-avoid">
+              <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
+                <h2 className="text-2xl font-bold">作業指示書</h2>
+                <div className="text-base">
+                  <span className="mr-4">{data.menu_date}</span>
+                  <span className="font-bold">食数 {n} 人</span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 mb-2">
+                ラウレアハレ厨房{data.note ? `　/　${data.note}` : ''}
+              </p>
+            </div>
+            <MealBlock label={m.label} code={m.code} slots={m.slots} n={n} R={m.R} kcal={mealKcal(m.slots, nx.grainG)} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="text-base">
       <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">

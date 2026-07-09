@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { fetchDailyMenusRange, type DailyMenuFull } from '../lib/daily'
+import { fetchDailyMenusRangeLite, type DailyMenuFull } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 
@@ -57,8 +57,9 @@ export default function StaffWeekPage() {
   const sunday = addDays(weekStart, 6)
   const dates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
 
+  // 週間表は品名しか使わないため軽量フェッチ（食材ツリーを取得しない）
   const { data, loading, error, reload } = useLoader(
-    () => fetchDailyMenusRange(weekStart, sunday),
+    () => fetchDailyMenusRangeLite(weekStart, sunday),
     [weekStart]
   )
   useRealtime(['daily_menus', 'menu_sets', 'dishes', 'dish_ingredients'], reload)

@@ -27,12 +27,12 @@ export default function KondateCard({ data }: { data: DailyMenuFull }) {
       {/* ヘッダ: 左右に固定イラスト、中央にタイトル＋日付（日付は自動） */}
       <div className="kondate-head flex items-center justify-between gap-3 mb-8 border-b-[3px] border-black pb-5">
         {/* 左=赤ちゃん(menu-right.png) / 右=三角巾の子(menu-left.png)：元エクセルの配置に合わせる */}
-        <img src={menuRight} alt="" aria-hidden className="h-28 sm:h-40 w-auto select-none" />
+        <img src={menuRight} alt="" aria-hidden decoding="async" className="h-28 sm:h-40 w-auto select-none" />
         <div className="text-center flex-1">
           <h2 className="text-4xl sm:text-6xl font-bold tracking-wider">今日の献立</h2>
           <p className="text-lg sm:text-2xl mt-2">{reiwaDate(data.menu_date)}</p>
         </div>
-        <img src={menuLeft} alt="" aria-hidden className="h-28 sm:h-40 w-auto select-none" />
+        <img src={menuLeft} alt="" aria-hidden decoding="async" className="h-28 sm:h-40 w-auto select-none" />
       </div>
 
       <div className="kondate-meals grid grid-cols-1 sm:grid-cols-3 gap-5">
