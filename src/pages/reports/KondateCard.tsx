@@ -1,18 +1,7 @@
 import type { DailyMenuFull } from '../../lib/daily'
+import { reiwaDate } from '../../lib/date'
 import menuLeft from '../../assets/menu-left.png'
 import menuRight from '../../assets/menu-right.png'
-
-const WD = ['日', '月', '火', '水', '木', '金', '土']
-
-// 'YYYY-MM-DD' → 令和8年6月26日（金）
-function reiwaDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const dt = new Date(y, m - 1, d)
-  const wd = WD[dt.getDay()]
-  const r = y - 2018 // 令和元年 = 2019
-  if (r < 1) return `${y}年${m}月${d}日（${wd}）` // 令和以前は西暦表示
-  return `令和${r === 1 ? '元' : r}年${m}月${d}日（${wd}）`
-}
 
 const MEAL_LABEL: Record<string, string> = {
   breakfast: '朝食',

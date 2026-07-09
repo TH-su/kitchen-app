@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { KenshokuRecord, NisshiRecord } from './reports'
 
 const one = (v: unknown): any => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 
@@ -97,6 +98,8 @@ export interface DailyMenuFull {
   lunchSetId: number | null
   dinnerSetId: number | null
   snackDishId: number | null
+  kenshoku: KenshokuRecord | null // 検食簿の入力値（単日ページのみ取得）
+  nisshi: NisshiRecord | null // 給食日誌の入力値（単日ページのみ取得）
 }
 
 const itemsOf = (dish: any): DayDishItem[] =>
@@ -157,8 +160,24 @@ const isMissingStapleCol = (e: any): boolean =>
   stapleColAvailable() &&
   !!e &&
   (e.code === '42703' || e.code === 'PGRST204' || /staple_grain_g/i.test(`${e.message ?? ''} ${e.details ?? ''}`))
-function dailyCols(): string {
-  return `id, menu_date, meal_count, note,${stapleColAvailable() ? ' staple_grain_g,' : ''}
+
+// kenshoku/nisshi 列（0005マイグレーション）の有無。staple と同方式で未適用環境でも取得が壊れないよう保護。
+let reportColMissingAt = 0
+function reportColsAvailable(): boolean {
+  return reportColMissingAt === 0 || Date.now() - reportColMissingAt > STAPLE_RECHECK_MS
+}
+function markReportMissing(): void {
+  reportColMissingAt = Date.now()
+}
+const isMissingReportCol = (e: any): boolean =>
+  reportColsAvailable() &&
+  !!e &&
+  (e.code === '42703' || e.code === 'PGRST204' || /\b(kenshoku|nisshi)\b/i.test(`${e.message ?? ''} ${e.details ?? ''}`))
+
+// withReports=true のときのみ kenshoku/nisshi を含める（単日ページ専用。一括取得には載せない＝転送削減）
+function dailyCols(withReports = false): string {
+  const reports = withReports && reportColsAvailable() ? ' kenshoku, nisshi,' : ''
+  return `id, menu_date, meal_count, note,${stapleColAvailable() ? ' staple_grain_g,' : ''}${reports}
     breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
     breakfast:breakfast_set_id(${SET_SEL}),
     lunch:lunch_set_id(${SET_SEL}),
@@ -167,9 +186,18 @@ function dailyCols(): string {
 }
 
 export async function fetchDailyMenuByDate(date: string): Promise<DailyMenuFull | null> {
-  const run = () => supabase.from('daily_menus').select(dailyCols()).eq('menu_date', date).maybeSingle()
+  const run = () => supabase.from('daily_menus').select(dailyCols(true)).eq('menu_date', date).maybeSingle()
   let res = await run()
-  if (isMissingStapleCol(res.error)) { markStapleMissing(); res = await run() }
+  if (res.error) {
+    // 任意列(staple_grain_g / kenshoku / nisshi)が未適用環境で欠落したら、該当フラグを落として再取得
+    const sMiss = isMissingStapleCol(res.error)
+    const rMiss = isMissingReportCol(res.error)
+    if (sMiss || rMiss) {
+      if (sMiss) markStapleMissing()
+      if (rMiss) markReportMissing()
+      res = await run()
+    }
+  }
   if (res.error) throw res.error
   return res.data ? rowToFull(res.data) : null
 }
@@ -199,6 +227,8 @@ function rowToFull(row: any): DailyMenuFull {
     lunchSetId: row.lunch_set_id ?? null,
     dinnerSetId: row.dinner_set_id ?? null,
     snackDishId: row.snack_dish_id ?? null,
+    kenshoku: (row.kenshoku ?? null) as KenshokuRecord | null,
+    nisshi: (row.nisshi ?? null) as NisshiRecord | null,
   }
 }
 
@@ -575,6 +605,21 @@ export async function upsertDailyMenu(input: DailyMenuInput): Promise<number> {
   if (!res.data) throw new Error('献立の保存に失敗しました（サーバーから予期しない応答）')
   return res.data.id as number
 }
+
+// 検食簿/給食日誌の入力を保存。渡した jsonb 列のみ更新＝献立選択・他レポート列は非破壊（列単位 upsert）。
+// menu_date キーの単一 upsert＝原子的（途中失敗で既存を失う窓が無い）。行が無い日は INSERT で作られる。
+export async function saveDailyReport(
+  menu_date: string,
+  patch: { kenshoku: KenshokuRecord } | { nisshi: NisshiRecord }
+): Promise<void> {
+  const { error } = await supabase
+    .from('daily_menus')
+    .upsert({ menu_date, ...patch }, { onConflict: 'menu_date' })
+    .select('id')
+    .single()
+  if (error) throw error
+}
+
 export async function deleteDailyMenu(id: number) {
   const { error } = await supabase.from('daily_menus').delete().eq('id', id)
   if (error) throw error
