@@ -12,6 +12,7 @@ import {
   type DaySlot,
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
+import { slashDateWd } from '../../lib/date'
 import type { ReportProps } from './types'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -60,7 +61,9 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
                     <td className={`${BORDER} px-2 py-1 text-right text-slate-600`}>
                       {sp != null ? `${round1(sp)} g` : '適量'}
                     </td>
-                    <td className={`${BORDER} px-2 py-1 text-right font-medium`}>
+                    {/* 総量: 画面は数値表示・印刷時のみテキストを透明化（枠線/列幅は border-slate-400・w-28 のまま不変）。
+                        現場配布の紙は手書き記入欄として空にする。数値確認はアプリ画面(@media screen)で行う運用 */}
+                    <td className={`${BORDER} px-2 py-1 text-right font-medium print:text-transparent`}>
                       {sp != null ? `${round1(sp * n)} g` : '適量'}
                     </td>
                     {i === 0 && (
@@ -115,7 +118,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
               <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
                 <h2 className="text-2xl font-bold">作業指示書</h2>
                 <div className="text-base">
-                  <span className="mr-4">{data.menu_date}</span>
+                  <span className="mr-4 text-xl font-bold whitespace-nowrap">{slashDateWd(data.menu_date)}</span>
                   <span className="font-bold">食数 {n} 人</span>
                 </div>
               </div>
@@ -135,7 +138,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
       <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
         <h2 className="text-2xl font-bold">作業指示書</h2>
         <div className="text-base">
-          <span className="mr-4">{data.menu_date}</span>
+          <span className="mr-4 text-xl font-bold whitespace-nowrap">{slashDateWd(data.menu_date)}</span>
           <span className="font-bold">食数 {n} 人</span>
         </div>
       </div>

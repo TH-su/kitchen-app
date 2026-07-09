@@ -24,3 +24,17 @@ export function nowHHMM(): string {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+// 'YYYY-MM-DD' → '2026/07/09（木）'（作業指示書ヘッダ用・西暦スラッシュ＋曜日1文字）。
+// 想定外入力（null/非ISO/存在しない日付）は原文をそのまま返す＝帳票表示が壊れない安全側フォールバック。
+// 曜日は new Date のローカルコンストラクタで算出（date.ts の JST 前提・toISOString 不使用の方針どおり）。
+export function slashDateWd(iso: string): string {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const y = Number(m[1]),
+    mo = Number(m[2]),
+    d = Number(m[3])
+  const dt = new Date(y, mo - 1, d)
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return iso // 2/30 等の月繰上りを検出し原文返し
+  return `${y}/${String(mo).padStart(2, '0')}/${String(d).padStart(2, '0')}（${WD[dt.getDay()]}）`
+}
