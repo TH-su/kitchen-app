@@ -1,6 +1,8 @@
 // 検食簿・給食日誌 共通のデュアルレンダー部品。
 // 画面=入力コントロール / 印刷=紙様式どおりの確定値（選択は丸＋太字・未入力は空欄）。
 // 全て Tailwind の print: ユーティリティで完結＝index.css は変更しない。
+import sealHashizume from '../../assets/seal-hashizume.png'
+
 const B = 'border border-slate-400'
 
 // 画面=トグルボタン群 / 印刷=全選択肢を「・」区切りで並べ選択値のみ丸＋太字。
@@ -169,7 +171,7 @@ export function SelectField({
         onChange={(e) => onChange(e.target.value)}
         className={`print:hidden border rounded px-2 py-1 text-base ${width} disabled:bg-slate-100`}
       >
-        {value && !options.includes(value) && <option value={value}>{value}</option>}
+        {!options.includes(value) && <option value={value}>{value || '（未選択）'}</option>}
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -226,7 +228,7 @@ export function NoteField({
 
 // 施設長/調理員の押印枠。stamped かつ src があれば印影画像を表示（時刻計算で stamped を渡す）。画面/印刷共通。
 // ※印影PNG受領後: ここで import して SealBox の src 既定へ設定すると、stamped の枠に自動表示される。
-export function SealBox({ label, stamped = false, src }: { label: string; stamped?: boolean; src?: string }) {
+export function SealBox({ label, stamped = false, src = sealHashizume }: { label: string; stamped?: boolean; src?: string }) {
   return (
     <div className="flex flex-col items-center">
       <span className="text-xs text-slate-600">{label}</span>
