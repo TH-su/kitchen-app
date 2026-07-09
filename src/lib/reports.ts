@@ -71,9 +71,10 @@ export interface NisshiRecord {
   snack: NisshiSnack
 }
 
-// ---- 空値ファクトリ（未入力は '' ＝印刷空欄。天候/検食者/調理担当者は既定値を種付け） ----
+// ---- 空値ファクトリ（未入力は '' ＝印刷空欄）。天候/検食者/調理担当者の既定(晴れ/検食A/調理A)は
+//      種付けせず、検食時間到達時の自動反映(kAuto/nAuto)で入る＝未記入日は空欄で印刷される。 ----
 export const emptyKMeal = (): KenshokuMeal => ({
-  weather: '晴れ',
+  weather: '',
   staple: '',
   taste: '',
   amount: '',
@@ -82,8 +83,8 @@ export const emptyKMeal = (): KenshokuMeal => ({
   plating: '',
   foreign: '',
   foreignNote: '',
-  inspector: '検食A',
-  cook: '調理A',
+  inspector: '',
+  cook: '',
   time: '',
   note: '',
 })
@@ -91,24 +92,24 @@ export const emptyKenshoku = (): KenshokuRecord => ({
   breakfast: emptyKMeal(),
   lunch: emptyKMeal(),
   dinner: emptyKMeal(),
-  snack: { inspector: '検食A', cook: '調理A', time: '', note: '' },
+  snack: { inspector: '', cook: '', time: '', note: '' },
 })
 
 export const emptyNMeal = (): NisshiMeal => ({
-  cook: '調理A',
+  cook: '',
   tempMain: '',
   tempSide: '',
   leftover: '',
-  inspector: '検食A',
+  inspector: '',
   doneTime: '',
   actualCount: '',
-  recorder: '調理A',
+  recorder: '',
 })
 export const emptyNisshi = (): NisshiRecord => ({
   breakfast: emptyNMeal(),
   lunch: emptyNMeal(),
   dinner: emptyNMeal(),
-  snack: { cook: '調理A', inspector: '検食A', left1F: '', left2F: '' },
+  snack: { cook: '', inspector: '', left1F: '', left2F: '' },
 })
 
 // ---- 後方互換マージ（保存JSONに欠けキーがあっても既定/空で補完＝様式追加に強い） ----
@@ -145,6 +146,7 @@ function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
 
 const kAuto = (time: string): Partial<KenshokuMeal> => ({
   time,
+  weather: '晴れ',
   staple: 'ちょうどよい',
   taste: 'ちょうどよい',
   temp: 'ちょうどよい',
