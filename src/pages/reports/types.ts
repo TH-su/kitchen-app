@@ -9,4 +9,5 @@ export interface ReportProps {
   pickSets: PickItem[]
   pickSnacks: PickItem[]
   pickError?: string | null // 献立ピッカーの取得失敗メッセージ（作業指示書の編集パネルで表示）
+  bulk?: boolean // 一括印刷ページからの読み取り専用レンダー時 true（保存/印刷ボタンを出さない）
 }

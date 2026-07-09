@@ -10,3 +10,17 @@ export function reiwaDate(iso: string): string {
   if (r < 1) return `${y}年${m}月${d}日（${wd}）`
   return `令和${r === 1 ? '元' : r}年${m}月${d}日（${wd}）`
 }
+
+// 端末ローカル日付 'YYYY-MM-DD'（現地据置タブレット＝JST前提。UTC/toISOString は日境界がずれるため使わない）
+export function todayStr(): string {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+// 端末ローカル時刻 'HH:MM'（自動反映のしきい値比較用）
+export function nowHHMM(): string {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}

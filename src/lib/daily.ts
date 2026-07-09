@@ -271,6 +271,31 @@ export async function fetchDailyMenusRangeLite(start: string, end: string): Prom
   return (data ?? []).map(rowToFull)
 }
 
+// 検食簿/給食日誌の一括印刷用: 皿名(Lite)＋ kenshoku/nisshi 入力値のみ取得（食材ツリーは引かない）。
+function dailyColsLiteReports(): string {
+  const reports = reportColsAvailable() ? ' kenshoku, nisshi,' : ''
+  return `id, menu_date, meal_count, note,${reports}
+    breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
+    breakfast:breakfast_set_id(${SET_SEL_LITE}),
+    lunch:lunch_set_id(${SET_SEL_LITE}),
+    dinner:dinner_set_id(${SET_SEL_LITE}),
+    snack:snack_dish_id(name, code)`
+}
+export async function fetchDailyReportsRange(start: string, end: string): Promise<DailyMenuFull[]> {
+  const run = () =>
+    supabase
+      .from('daily_menus')
+      .select(dailyColsLiteReports())
+      .gte('menu_date', start)
+      .lte('menu_date', end)
+      .order('menu_date', { ascending: true })
+      .limit(370)
+  let res = await run()
+  if (isMissingReportCol(res.error)) { markReportMissing(); res = await run() }
+  if (res.error) throw res.error
+  return (res.data ?? []).map(rowToFull)
+}
+
 // 食材ごとの総使用量を集計（全食事＋おやつ横断）
 export interface IngredientTotal {
   name: string
