@@ -12,7 +12,7 @@ import {
   type KenshokuMeal,
   type KenshokuSnack,
 } from '../../lib/reports'
-import { RadioRow, RadioInline, FieldInput, SelectField, NoteField, SealBox } from './ReportFields'
+import { RadioRow, RadioInline, FieldInput, SelectField, ComboField, NoteField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
@@ -22,12 +22,14 @@ function KenshokuMealForm({
   v,
   set,
   editable,
+  linkInspector = false,
 }: {
   label: string
   dishes: string
   v: KenshokuMeal
   set: (patch: Partial<KenshokuMeal>) => void
   editable: boolean
+  linkInspector?: boolean // true=朝夕: 調理担当者を変えると検食者も同名に連動 / false=昼: 独立
 }) {
   return (
     <table className="w-full border-collapse mb-3 break-inside-avoid">
@@ -65,8 +67,8 @@ function KenshokuMealForm({
           <td className={`${B} px-2 py-1 bg-slate-50`}>検食者/担当者/時刻</td>
           <td className={`${B} px-2 py-1`}>
             <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-              <span>検食者 <SelectField value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
-              <span>調理担当者 <SelectField value={v.cook} onChange={(x) => set({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
+              <span>検食者 <ComboField value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
+              <span>調理担当者 <ComboField value={v.cook} onChange={(x) => set(linkInspector ? { cook: x, inspector: x } : { cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
               <span>検食時間 <FieldInput type="time" value={v.time} onChange={(x) => set({ time: x })} editable={editable} width="w-32" /></span>
             </span>
           </td>
@@ -155,9 +157,9 @@ export default function Kenshoku({ data, editable, reload, bulk = false }: Repor
         </>
       )}
 
-      <KenshokuMealForm label="朝食" dishes={dishesOf('breakfast')} v={k.breakfast} set={(p) => setMeal('breakfast', p)} editable={editable} />
+      <KenshokuMealForm label="朝食" dishes={dishesOf('breakfast')} v={k.breakfast} set={(p) => setMeal('breakfast', p)} editable={editable} linkInspector />
       <KenshokuMealForm label="昼食" dishes={dishesOf('lunch')} v={k.lunch} set={(p) => setMeal('lunch', p)} editable={editable} />
-      <KenshokuMealForm label="夕食" dishes={dishesOf('dinner')} v={k.dinner} set={(p) => setMeal('dinner', p)} editable={editable} />
+      <KenshokuMealForm label="夕食" dishes={dishesOf('dinner')} v={k.dinner} set={(p) => setMeal('dinner', p)} editable={editable} linkInspector />
 
       {data.snack && (
         <table className="w-full border-collapse mb-3 break-inside-avoid">
@@ -173,8 +175,8 @@ export default function Kenshoku({ data, editable, reload, bulk = false }: Repor
               <td className={`${B} px-2 py-1 bg-slate-50`}>検食者/担当者/時刻</td>
               <td className={`${B} px-2 py-1`}>
                 <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                  <span>検食者 <SelectField value={k.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
-                  <span>担当者 <SelectField value={k.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
+                  <span>検食者 <ComboField value={k.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
+                  <span>担当者 <ComboField value={k.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
                   <span>時刻 <FieldInput type="time" value={k.snack.time} onChange={(x) => setSnack({ time: x })} editable={editable} width="w-32" /></span>
                 </span>
               </td>

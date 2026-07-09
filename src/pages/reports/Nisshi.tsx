@@ -13,7 +13,7 @@ import {
   type NisshiMeal,
   type NisshiSnack,
 } from '../../lib/reports'
-import { RadioInline, FieldInput, SelectField, SealBox } from './ReportFields'
+import { RadioInline, FieldInput, ComboField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
@@ -104,8 +104,8 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
                 <td className={`${B} px-2 py-1 align-top text-sm`}>
                   調理担当者
                   <br />
-                  {/* 調理担当者を変えると検食日誌記録者も連動 */}
-                  <SelectField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
+                  {/* 調理担当者を変えると検食日誌記録者も連動（検食者は独立） */}
+                  <ComboField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
                 </td>
                 <td className={`${B} px-2 py-1`}>{m.slots.length ? m.slots.map((s) => s.name).join('／') : '未設定'}</td>
                 <td className={`${B} px-2 py-1 text-sm whitespace-nowrap`}>
@@ -120,7 +120,7 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
               <tr>
                 <td className={`${B} px-2 py-1 text-sm`} colSpan={2}>
                   <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                    <span>検食者 <SelectField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" /></span>
+                    <span>検食者 <ComboField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" /></span>
                     <span>出来上がり <FieldInput type="time" value={v.doneTime} onChange={(x) => setMeal(key, { doneTime: x })} editable={editable} width="w-28" /></span>
                   </span>
                 </td>
@@ -130,7 +130,7 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
                       予定 {data.meal_count} 人 ／ 実施{' '}
                       <FieldInput type="number" value={v.actualCount} onChange={(x) => setMeal(key, { actualCount: x })} editable={editable} width="w-16" suffix="人" />
                     </span>
-                    <span>検食日誌記録者 <SelectField value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" /></span>
+                    <span>検食日誌記録者 <ComboField value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" /></span>
                   </span>
                 </td>
               </tr>
@@ -149,9 +149,9 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
             </tr>
             <tr>
               <td className={`${B} px-2 py-1 text-sm`}>
-                調理担当者 <SelectField value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
+                調理担当者 <ComboField value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
                 <br />
-                検食者 <SelectField value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" />
+                検食者 <ComboField value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" />
               </td>
               <td className={`${B} px-2 py-1`}>{data.snack.name}</td>
               <td className={`${B} px-2 py-1 text-sm`}>
