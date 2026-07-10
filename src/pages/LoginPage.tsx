@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { KITCHEN_LABEL } from '../lib/facility'
 
 // 未ログイン時に全画面で表示するログイン画面（アプリ本体の手前でゲート）
 export default function LoginPage() {
@@ -23,7 +24,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-emerald-800">厨房メニュー管理</h1>
-          <p className="text-slate-500 text-sm mt-1">ラウレアハレ厨房</p>
+          <p className="text-slate-500 text-sm mt-1">{KITCHEN_LABEL}</p>
         </div>
         <form onSubmit={submit} className="bg-white rounded-xl shadow border p-6 space-y-4">
           <h2 className="text-lg font-bold text-slate-800">ログイン</h2>

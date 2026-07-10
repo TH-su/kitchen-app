@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchDailyMenusRangeLite, type DailyMenuFull } from '../lib/daily'
+import { KITCHEN_LABEL } from '../lib/facility'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 
@@ -106,7 +107,7 @@ export default function StaffWeekPage() {
         <div className="text-center mb-2">
           <h2 className="staffweek-title text-xl font-bold">週間献立表（職員確認用）</h2>
           <p className="text-sm text-slate-600">
-            ラウレアハレ厨房　{weekStart} 〜 {sunday}
+            {KITCHEN_LABEL}　{weekStart} 〜 {sunday}
           </p>
         </div>
         <table className="staffweek-table w-full border-collapse text-sm">

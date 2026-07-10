@@ -13,6 +13,7 @@ import {
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
 import { slashDateWd } from '../../lib/date'
+import { KITCHEN_LABEL } from '../../lib/facility'
 import type { ReportProps } from './types'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -123,7 +124,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
                 </div>
               </div>
               <p className="text-sm text-slate-600 mb-2">
-                ラウレアハレ厨房{data.note ? `　/　${data.note}` : ''}
+                {KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}
               </p>
             </div>
             <MealBlock label={m.label} code={m.code} slots={m.slots} n={n} R={m.R} kcal={mealKcal(m.slots, nx.grainG)} />
@@ -143,7 +144,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
         </div>
       </div>
       <div className="flex items-center justify-between mb-2 gap-3">
-        <p className="text-sm text-slate-600">ラウレアハレ厨房{data.note ? `　/　${data.note}` : ''}</p>
+        <p className="text-sm text-slate-600">{KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}</p>
         {!bulk && (
           <div className="flex items-center gap-2">
             {dirty && (

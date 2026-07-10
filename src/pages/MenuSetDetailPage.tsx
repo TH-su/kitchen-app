@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchMenuSetDetail, fetchAllIngredientNames, fetchIngredientKcalMap, fetchMenuSets, type MenuSetDetail } from '../lib/queries'
+import { KITCHEN_LABEL } from '../lib/facility'
 import {
   updateDishName,
   saveDishRecipe,
@@ -267,7 +268,7 @@ export default function MenuSetDetailPage() {
         </div>
       </div>
       <div className="hidden print:block mb-3 text-sm text-slate-600">
-        ラウレアハレ厨房　印刷日: {new Date().toLocaleDateString('ja-JP')}
+        {KITCHEN_LABEL}　印刷日: {new Date().toLocaleDateString('ja-JP')}
       </div>
       <div className="flex items-center gap-2 mb-3">
         <button

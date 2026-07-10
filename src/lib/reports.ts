@@ -2,8 +2,10 @@
 // 保存先は daily_menus.kenshoku / daily_menus.nisshi（jsonb・様式まるごと1オブジェクト）。
 // 数値も string 保持（入力中間状態を許容。表示も string で往復）。
 import { todayStr, nowHHMM } from './date'
+import { REPORT_INSPECTORS, REPORT_COOKS, DEFAULT_INSPECTOR, DEFAULT_COOK } from './facility'
 
 // ---- 選択肢（正典の順序＝画面/印刷の並び順） ----
+// 検食者/調理担当者は環境変数で差し替え可（未設定なら従来の既定値。詳細は lib/facility.ts）
 export const K_OPTS = {
   staple: ['ちょうどよい', '硬い', 'やわらかい'],
   taste: ['ちょうどよい', '薄い', '濃い'],
@@ -13,8 +15,8 @@ export const K_OPTS = {
   plating: ['特によい', 'よい', '悪い'],
   foreign: ['なし', 'あり'],
   weather: ['晴れ', '曇り', '雨'],
-  inspector: ['坂本', '堤', '橋爪'],
-  cook: ['佐々木', '松岡', '田嶋'],
+  inspector: REPORT_INSPECTORS,
+  cook: REPORT_COOKS,
 } as const
 export const N_LEFT = ['多', '少', '無'] as const // おやつ残食 1F/2F
 
@@ -144,8 +146,9 @@ function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
   return out
 }
 
-// 検食者(inspector)は食ごとに規定が異なる（昼=坂本 独立／朝夕=調理担当者に連動）ため kAuto から分離し、
-// applyKenshokuAuto 側で補完する。ここでは共通項目＋調理担当者(佐々木)のみ。
+// 検食者(inspector)は食ごとに規定が異なる（昼=既定検食者 独立／朝夕=調理担当者に連動）ため kAuto から
+// 分離し、applyKenshokuAuto 側で補完する。ここでは共通項目＋既定の調理担当者のみ。
+// 既定の担当者は候補リストの先頭（環境変数未設定なら 検食者=坂本 / 調理担当者=佐々木 で従来どおり）。
 const kAuto = (time: string): Partial<KenshokuMeal> => ({
   time,
   weather: '晴れ',
@@ -156,15 +159,15 @@ const kAuto = (time: string): Partial<KenshokuMeal> => ({
   freshness: '特によい',
   plating: '特によい',
   foreign: 'なし',
-  cook: '佐々木',
+  cook: DEFAULT_COOK,
 })
 const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
   doneTime,
   tempMain: '90',
   tempSide: '90',
-  inspector: '坂本',
-  cook: '佐々木',
-  recorder: '佐々木',
+  inspector: DEFAULT_INSPECTOR,
+  cook: DEFAULT_COOK,
+  recorder: DEFAULT_COOK,
 })
 
 const MEALS = ['breakfast', 'lunch', 'dinner'] as const
@@ -178,9 +181,9 @@ export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, edita
   for (const m of MEALS) {
     if (t < MEAL_THRESHOLD[m]) continue
     let meal = fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m]))
-    // 検食者: 元が未入力の食のみ補完。昼=坂本(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
+    // 検食者: 元が未入力の食のみ補完。昼=既定検食者(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
     if (isEmpty(next[m].inspector)) {
-      meal = { ...meal, inspector: m === 'lunch' ? '坂本' : meal.cook }
+      meal = { ...meal, inspector: m === 'lunch' ? DEFAULT_INSPECTOR : meal.cook }
     }
     next = { ...next, [m]: meal }
   }

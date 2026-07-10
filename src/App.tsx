@@ -16,6 +16,7 @@ import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useAuth } from './hooks/useAuth'
+import { KITCHEN_LABEL } from './lib/facility'
 
 function Tab({ to, children }: { to: string; children: ReactNode }) {
   return (
@@ -62,7 +63,7 @@ function AppShell() {
       <header className="bg-emerald-700 text-white px-4 py-3 shadow print:hidden flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">厨房メニュー管理</h1>
-          <p className="text-emerald-100 text-xs">ラウレアハレ厨房</p>
+          <p className="text-emerald-100 text-xs">{KITCHEN_LABEL}</p>
         </div>
         <LoginBar />
       </header>
