@@ -54,8 +54,10 @@ export async function ensureIngredients(names: string[]): Promise<Map<string, nu
 
 // 料理のレシピ明細を入れ替える。
 // データ損失防止: 破壊的な「全削除」は、食材ID解決・挿入データの構築が
-// すべて成功してから最後に実行する（失敗しやすい処理を DELETE より前へ寄せ、
-// 途中失敗で既存レシピを失う窓を最小化する）。
+// すべて成功してから最後に実行する（失敗しやすい処理を DELETE より前へ寄せる）。
+// 入れ替え本体は DB 関数 replace_dish_recipe（migration 0006）で1トランザクション化
+// しており、DELETE 成功→INSERT 失敗（通信断・制約違反）で既存レシピだけが消える
+// 窓は存在しない（失敗時は DELETE ごと巻き戻る）。
 export async function saveDishRecipe(dishId: number, rows: RecipeRowInput[]) {
   // 1) 入力を正規化・重複排除（同名食材は先勝ちで1行に集約）。DBに触る前に確定させる
   const seen = new Set<string>()
@@ -68,19 +70,19 @@ export async function saveDishRecipe(dishId: number, rows: RecipeRowInput[]) {
     })
 
   // 2) 食材IDを1往復で一括解決し、挿入ペイロードを先に構築。
-  //    ここで失敗しても既存レシピは無傷（DELETE 前のため）
+  //    ここで失敗しても既存レシピは無傷（入れ替え前のため）
   const idByName = await ensureIngredients(clean.map((r) => r.name))
-  const insert = clean.map((r, i) => {
+  const payload = clean.map((r, i) => {
     const ingredient_id = idByName.get(r.name)
     if (ingredient_id == null) throw new Error(`食材「${r.name}」の登録に失敗しました`)
-    return { dish_id: dishId, ingredient_id, amount_g: r.amount_g, sort_order: i }
+    return { ingredient_id, amount_g: r.amount_g, sort_order: i }
   })
 
-  // 3) ここまで成功して初めて既存明細を入れ替える（DELETE → INSERT）
-  const { error: delErr } = await supabase.from('dish_ingredients').delete().eq('dish_id', dishId)
-  if (delErr) throw delErr
-  if (!insert.length) return // 全削除＝レシピを空にする意図（正常系）
-  const { error } = await supabase.from('dish_ingredients').insert(insert)
+  // 3) ここまで成功して初めて既存明細を入れ替える（空配列＝レシピを空にする意図・従来どおり）
+  const { error } = await supabase.rpc('replace_dish_recipe', {
+    p_dish_id: dishId,
+    p_rows: payload,
+  })
   if (error) throw error
 }
 
