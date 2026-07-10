@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ReportProps } from './types'
-import { saveDailyReport } from '../../lib/daily'
 import { reiwaDate } from '../../lib/date'
 import {
   K_OPTS,
@@ -13,43 +11,26 @@ import {
   type NisshiMeal,
   type NisshiSnack,
 } from '../../lib/reports'
+import { useDailyReport } from '../../hooks/useDailyReport'
 import { RadioInline, FieldInput, ComboField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
 export default function Nisshi({ data, editable, reload, bulk = false }: ReportProps) {
-  const [nz, setNz] = useState<NisshiRecord>(emptyNisshi)
-  const loaded = useRef('') // 保存済みスナップショット（dirty 判定用）
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-
-  // data → state 同期＋時間経過の自動反映（当日・空欄のみ）。基準は保存済み saved＝先祖返り不可・冪等。
-  useEffect(() => {
-    const saved = mergeNisshi(emptyNisshi(), data?.nisshi ?? null)
-    setNz(applyNisshiAuto(saved, data?.menu_date ?? '', editable))
-    loaded.current = JSON.stringify(saved)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.menu_date, data?.id, editable])
+  // 自動反映は当日その場で DB へ永続化される（useDailyReport）。手動編集は従来どおり保存ボタンで確定。
+  const { v: nz, setV: setNz, dirty, saving, saveError, save } = useDailyReport<NisshiRecord>({
+    data,
+    editable,
+    reload,
+    column: 'nisshi',
+    empty: emptyNisshi,
+    merge: mergeNisshi,
+    applyAuto: applyNisshiAuto,
+  })
 
   const setMeal = (m: 'breakfast' | 'lunch' | 'dinner', patch: Partial<NisshiMeal>) =>
     setNz((p) => ({ ...p, [m]: { ...p[m], ...patch } }))
   const setSnack = (patch: Partial<NisshiSnack>) => setNz((p) => ({ ...p, snack: { ...p.snack, ...patch } }))
-
-  const dirty = editable && JSON.stringify(nz) !== loaded.current
-  const save = async () => {
-    if (saving || !data) return
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await saveDailyReport(data.menu_date, { nisshi: nz })
-      loaded.current = JSON.stringify(nz)
-      reload()
-    } catch (e: any) {
-      setSaveError(String(e?.message ?? e))
-    } finally {
-      setSaving(false)
-    }
-  }
 
   if (!data) return <p className="text-slate-500">この日の献立は未設定です。</p>
   const sealed = sealAt(data.menu_date) // 夕食提供(17:20)経過で施設長印表示（時刻計算・保存しない）

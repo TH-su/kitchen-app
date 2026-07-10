@@ -645,6 +645,28 @@ export async function saveDailyReport(
   if (error) throw error
 }
 
+// 指定日の kenshoku / nisshi 列だけを軽量取得（autosave が「DB最新値」を基底にするため）。
+// 0005 未適用環境では null を返して呼び出し側を壊さない（列欠落ガードは既存と同方式）。
+export async function fetchReportColumn(
+  menu_date: string,
+  col: 'kenshoku' | 'nisshi'
+): Promise<any | null> {
+  if (!reportColsAvailable()) return null
+  const { data, error } = await supabase
+    .from('daily_menus')
+    .select(col)
+    .eq('menu_date', menu_date)
+    .maybeSingle()
+  if (error) {
+    if (isMissingReportCol(error)) {
+      markReportMissing()
+      return null
+    }
+    throw error
+  }
+  return (data as any)?.[col] ?? null
+}
+
 export async function deleteDailyMenu(id: number) {
   const { error } = await supabase.from('daily_menus').delete().eq('id', id)
   if (error) throw error

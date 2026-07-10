@@ -204,9 +204,13 @@
     break-after: auto;
   }
 }
+/* 複数日一括表示のときだけ遅延描画する（.report-lazy は BulkPage が !single のとき付与）。
+   content-visibility:auto は paint containment を伴い、単日=編集モードでは検食者/調理担当者の
+   コンボボックスの絶対配置ドロップダウンをカード下端で切り落とすため、単日には付けない。
+   @media screen 限定＝印刷（.kenshoku-page/.nisshi-page の break-after）は完全に不変。 */
 @media screen {
-  .kenshoku-page,
-  .nisshi-page {
+  .kenshoku-page.report-lazy,
+  .nisshi-page.report-lazy {
     content-visibility: auto;
     contain-intrinsic-size: auto 1100px;
   }
