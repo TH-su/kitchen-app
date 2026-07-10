@@ -134,7 +134,7 @@ export const MEAL_THRESHOLD: Record<'breakfast' | 'lunch' | 'dinner', string> = 
 }
 
 // 空判定は '' と null/undefined のみ（'0'＝温度/残食0は入力済み扱いで保護）
-const isEmpty = (v: unknown): boolean => v === '' || v == null
+export const isEmpty = (v: unknown): boolean => v === '' || v == null
 // base の空フィールドにのみ auto を入れる。非空値は絶対に触らない（＝手動保存値は不可侵）
 function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
   const out = { ...base }

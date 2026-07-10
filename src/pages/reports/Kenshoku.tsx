@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
 import type { ReportProps } from './types'
-import { saveDailyReport } from '../../lib/daily'
 import { reiwaDate } from '../../lib/date'
 import {
   K_OPTS,
@@ -12,7 +10,8 @@ import {
   type KenshokuMeal,
   type KenshokuSnack,
 } from '../../lib/reports'
-import { RadioRow, RadioInline, FieldInput, SelectField, ComboField, NoteField, SealBox } from './ReportFields'
+import { useDailyReport } from '../../hooks/useDailyReport'
+import { RadioRow, RadioInline, FieldInput, SelectField, ComboField, MirrorField, NoteField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
@@ -67,7 +66,11 @@ function KenshokuMealForm({
           <td className={`${B} px-2 py-1 bg-slate-50`}>検食者/担当者/時刻</td>
           <td className={`${B} px-2 py-1`}>
             <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-              <span>検食者 <ComboField value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" /></span>
+              {/* 朝夕は調理担当者に連動する表示専用（プルダウン無し）。値は保存済み inspector を出す
+                  ＝過去に inspector≠cook で保存された記録を画面/印刷/保存で改変しない */}
+              <span>検食者 {linkInspector
+                ? <MirrorField value={v.inspector} width="w-28" />
+                : <ComboField value={v.inspector} onChange={(x) => set({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-28" />}</span>
               <span>調理担当者 <ComboField value={v.cook} onChange={(x) => set(linkInspector ? { cook: x, inspector: x } : { cook: x })} editable={editable} options={K_OPTS.cook} width="w-28" /></span>
               <span>検食時間 <FieldInput type="time" value={v.time} onChange={(x) => set({ time: x })} editable={editable} width="w-32" /></span>
             </span>
@@ -85,38 +88,20 @@ function KenshokuMealForm({
 }
 
 export default function Kenshoku({ data, editable, reload, bulk = false }: ReportProps) {
-  const [k, setK] = useState<KenshokuRecord>(emptyKenshoku)
-  const loaded = useRef('') // 保存済みスナップショット（dirty 判定用）
-  const [saving, setSaving] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-
-  // data → state 同期＋時間経過の自動反映（当日・空欄のみ）。基準は保存済み saved＝先祖返り不可・冪等。
-  useEffect(() => {
-    const saved = mergeKenshoku(emptyKenshoku(), data?.kenshoku ?? null)
-    setK(applyKenshokuAuto(saved, data?.menu_date ?? '', editable))
-    loaded.current = JSON.stringify(saved) // 自動反映分は dirty として「未保存」点灯→保存で確定（案B）
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.menu_date, data?.id, editable])
+  // 自動反映は当日その場で DB へ永続化される（useDailyReport）。手動編集は従来どおり保存ボタンで確定。
+  const { v: k, setV: setK, dirty, saving, saveError, save } = useDailyReport<KenshokuRecord>({
+    data,
+    editable,
+    reload,
+    column: 'kenshoku',
+    empty: emptyKenshoku,
+    merge: mergeKenshoku,
+    applyAuto: applyKenshokuAuto,
+  })
 
   const setMeal = (m: 'breakfast' | 'lunch' | 'dinner', patch: Partial<KenshokuMeal>) =>
     setK((p) => ({ ...p, [m]: { ...p[m], ...patch } }))
   const setSnack = (patch: Partial<KenshokuSnack>) => setK((p) => ({ ...p, snack: { ...p.snack, ...patch } }))
-
-  const dirty = editable && JSON.stringify(k) !== loaded.current
-  const save = async () => {
-    if (saving || !data) return
-    setSaving(true)
-    setSaveError(null)
-    try {
-      await saveDailyReport(data.menu_date, { kenshoku: k })
-      loaded.current = JSON.stringify(k)
-      reload()
-    } catch (e: any) {
-      setSaveError(String(e?.message ?? e))
-    } finally {
-      setSaving(false)
-    }
-  }
 
   if (!data) return <p className="text-slate-500">この日の献立は未設定です。</p>
   const dishesOf = (key: string) => {

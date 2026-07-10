@@ -98,8 +98,10 @@ export default function NisshiBulkPage() {
         error ? null : <p className="text-slate-400">{single ? 'この日の献立は未設定です（作業指示書で登録してください）。' : 'この期間に登録された献立はありません。'}</p>
       ) : (
         <div>
+          {/* report-lazy(遅延描画)は複数日一括のみ。単日=編集モードに付けると
+              コンボのドロップダウンが paint containment で切れるため付けない */}
           {items.map((d) => (
-            <div key={d.id} className="nisshi-page">
+            <div key={d.id} className={`nisshi-page${single ? '' : ' report-lazy'}`}>
               <Nisshi data={d} editable={single && editable} reload={reload} bulk={!single} date={d.menu_date} pickSets={[]} pickSnacks={[]} />
             </div>
           ))}
