@@ -64,12 +64,25 @@ for (const d of DIRS) {
 records.sort((a, b) => a.date.localeCompare(b.date))
 
 // --- 番号解決（menu_sets / snack dishes） ---
-const { data: sets } = await sb.from('menu_sets').select('id, code')
-const setByCode = new Map((sets ?? []).map((s) => [s.code, s.id]))
-const { data: snacks } = await sb.from('dishes').select('id, code, name').eq('dish_type', 'snack').not('code', 'is', null)
-const snackByCode = new Map((snacks ?? []).map((s) => [s.code, { id: s.id, name: s.name }]))
-const { data: existing } = await sb.from('daily_menus').select('menu_date')
-const existingDates = new Set((existing ?? []).map((r) => r.menu_date))
+// Supabaseは既定1000行上限のため全件ページング必須。取得エラーは fail-fast
+// （エラーを空扱いすると --apply が既存日の set_id を全 null 上書きする事故になる）
+async function fetchAllRows(label, build) {
+  const out = []
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await build().range(from, from + page - 1)
+    if (error) { console.error(`✗ ${label} の取得に失敗: ${error.message}`); process.exit(1) }
+    out.push(...(data ?? []))
+    if (!data || data.length < page) break
+  }
+  return out
+}
+const sets = await fetchAllRows('menu_sets', () => sb.from('menu_sets').select('id, code').order('id'))
+const setByCode = new Map(sets.map((s) => [s.code, s.id]))
+const snacks = await fetchAllRows('dishes(snack)', () => sb.from('dishes').select('id, code, name').eq('dish_type', 'snack').not('code', 'is', null).order('id'))
+const snackByCode = new Map(snacks.map((s) => [s.code, { id: s.id, name: s.name }]))
+const existing = await fetchAllRows('daily_menus', () => sb.from('daily_menus').select('menu_date').order('menu_date'))
+const existingDates = new Set(existing.map((r) => r.menu_date))
 
 const unresolved = { set: new Set(), snack: new Set() }
 const rows = records.map((r) => {
@@ -107,6 +120,8 @@ for (const r of records) {
     dinner_set_id: r.dinner ? setByCode.get(r.dinner) ?? null : null,
     snack_dish_id: r.snack ? snackByCode.get(r.snack)?.id ?? null : null,
   }
+  // 既存日はアプリで調整済みの食数を温存（upsertは提供列を全てSETするため）。既定30は新規日のみ
+  if (existingDates.has(r.date)) delete payload.meal_count
   const { error } = await sb.from('daily_menus').upsert(payload, { onConflict: 'menu_date' })
   if (error) { console.log('  ✗', r.date, error.message); skip++ } else okc++
 }
