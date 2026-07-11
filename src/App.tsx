@@ -12,6 +12,7 @@ import KenshokuBulkPage from './pages/KenshokuBulkPage'
 import NisshiBulkPage from './pages/NisshiBulkPage'
 import SimulatePage from './pages/SimulatePage'
 import StaffWeekPage from './pages/StaffWeekPage'
+import WsSettingsPage from './pages/WsSettingsPage'
 import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -65,7 +66,17 @@ function AppShell() {
           <h1 className="text-lg font-bold">厨房メニュー管理</h1>
           <p className="text-emerald-100 text-xs">{KITCHEN_LABEL}</p>
         </div>
-        <LoginBar />
+        <div className="flex items-center gap-3">
+          {/* 連携設定への小さな歯車リンク。ヘッダーは print:hidden 済みのため印刷影響なし */}
+          <NavLink
+            to="/ws-settings"
+            title="連携設定"
+            className={({ isActive }) => `text-sm ${isActive ? 'text-white font-medium' : 'text-emerald-100'}`}
+          >
+            ⚙ 連携
+          </NavLink>
+          <LoginBar />
+        </div>
       </header>
       <Nav />
       {/* 画面は max-w-5xl 中央。印刷時のみ上限解除＝A3献立表を用紙幅いっぱいに（A4帳票は元々用紙幅で頭打ちのため影響なし。paddingは触らずA4帳票を完全保護） */}
@@ -86,6 +97,7 @@ function AppShell() {
             <Route path="/kenshoku-print" element={<KenshokuBulkPage />} />
             <Route path="/nisshi-print" element={<NisshiBulkPage />} />
             <Route path="/simulate" element={<SimulatePage />} />
+            <Route path="/ws-settings" element={<WsSettingsPage />} />
             <Route path="/new" element={<NewMenuSetPage />} />
           </Routes>
         </ErrorBoundary>

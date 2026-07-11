@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchDailyMenuByDate, fetchMenuSetPickList, fetchSnackPickList, type PickItem } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
+import { getSnapshot, resolveCounts, subscribe } from '../lib/staffStore'
 import WorkInstruction from './reports/WorkInstruction'
 import Kenshoku from './reports/Kenshoku'
 import Nisshi from './reports/Nisshi'
@@ -58,6 +60,47 @@ export default function DayLayout() {
 
   const [tab, setTab] = useState<TabKey>('work')
 
+  // 在籍者数（週間計画由来・読み取り専用）。ストアを購読し counts の変化時のみ再描画する。
+  // 連携未設定・取得失敗はストア側で握り潰され counts は null のまま＝表示せず従来と同一挙動。
+  const storeSnapshot = useSyncExternalStore(subscribe, getSnapshot)
+  const counts = storeSnapshot.counts
+  const [applying, setApplying] = useState(false)
+  const [applyError, setApplyError] = useState<string | null>(null)
+  const [applyDone, setApplyDone] = useState(false) // 反映成功後の注意喚起表示
+
+  // ログイン時のみ取得を促す（表示・書込とも編集者向け。単一飛行/TTL/失敗握り潰しはストア側）。
+  useEffect(() => {
+    if (!editable) return
+    void resolveCounts()
+  }, [editable])
+
+  // 日付が変わったら反映後の注意喚起/エラーをリセット（前の日付の文脈を持ち越さない）。
+  useEffect(() => {
+    setApplyDone(false)
+    setApplyError(null)
+  }, [date])
+
+  // ボタン押下時のみ実行。既存行の meal_count のみを更新（upsert しない＝献立未設定日に幽霊行を作らない）。
+  const applyCounts = async () => {
+    if (applying || !data || !counts) return // 行が無い日は無効化しているが二重ガード
+    setApplying(true)
+    setApplyError(null)
+    setApplyDone(false)
+    try {
+      const { error: e } = await supabase
+        .from('daily_menus')
+        .update({ meal_count: counts.residents - counts.hospitalized })
+        .eq('menu_date', date)
+      if (e) throw e
+      reload()
+      setApplyDone(true)
+    } catch (err: any) {
+      setApplyError(String(err?.message ?? err))
+    } finally {
+      setApplying(false)
+    }
+  }
+
   if (loading && !data) return <p className="text-slate-500">読み込み中…</p>
   if (error) return <p className="text-red-600">エラー: {error}</p>
 
@@ -81,6 +124,29 @@ export default function DayLayout() {
           </button>
         ))}
       </div>
+
+      {/* 在籍者数（週間計画由来）＝食数への手動反映。連携未設定/未取得なら描画しない。印刷時は非表示 */}
+      {editable && counts && (
+        <div className="flex items-center flex-wrap gap-2 mb-3 print:hidden text-sm">
+          <span className="text-slate-600">
+            在籍者数: {counts.residents}名（うち入院 {counts.hospitalized}名）
+          </span>
+          <button
+            onClick={applyCounts}
+            disabled={!data || applying}
+            className="min-h-[40px] px-3 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 font-medium hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            食数へ反映 ({counts.residents - counts.hospitalized})
+          </button>
+          {!data && <span className="text-slate-400 text-xs">先に献立を設定</span>}
+          {applyError && <span className="text-red-600 text-xs">{applyError}</span>}
+          {applyDone && (
+            <span className="basis-full text-amber-700 text-xs bg-amber-50 border border-amber-300 rounded px-2 py-1">
+              食数を反映しました。作業指示書タブの食数表示を最新にするには画面を再読込してください（再読込せず作業指示書を保存し直すと、反映前の食数に戻ります）。
+            </span>
+          )}
+        </div>
+      )}
 
       {/* 日付の前後移動（前日◀ / ▶翌日）。印刷時は非表示 */}
       <div className="flex items-center justify-center gap-3 mb-3 print:hidden">

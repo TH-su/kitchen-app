@@ -1,7 +1,6 @@
 import type { ReportProps } from './types'
 import { reiwaDate } from '../../lib/date'
 import {
-  K_OPTS,
   N_LEFT,
   emptyNisshi,
   mergeNisshi,
@@ -12,6 +11,7 @@ import {
   type NisshiSnack,
 } from '../../lib/reports'
 import { useDailyReport } from '../../hooks/useDailyReport'
+import { useStaffCandidates } from '../../hooks/useStaffCandidates'
 import { RadioInline, FieldInput, ComboField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
@@ -27,6 +27,8 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
     merge: mergeNisshi,
     applyAuto: applyNisshiAuto,
   })
+  // 検食者/調理担当者コンボの候補リスト（env既定＋シフト職員名簿）。既定値・自動反映は不変。
+  const { inspectors, cooks } = useStaffCandidates()
 
   const setMeal = (m: 'breakfast' | 'lunch' | 'dinner', patch: Partial<NisshiMeal>) =>
     setNz((p) => ({ ...p, [m]: { ...p[m], ...patch } }))
@@ -86,7 +88,7 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
                   調理担当者
                   <br />
                   {/* 調理担当者を変えると検食日誌記録者も連動（検食者は独立） */}
-                  <ComboField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
+                  <ComboField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={cooks} width="w-24" />
                 </td>
                 <td className={`${B} px-2 py-1`}>{m.slots.length ? m.slots.map((s) => s.name).join('／') : '未設定'}</td>
                 <td className={`${B} px-2 py-1 text-sm whitespace-nowrap`}>
@@ -101,7 +103,7 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
               <tr>
                 <td className={`${B} px-2 py-1 text-sm`} colSpan={2}>
                   <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                    <span>検食者 <ComboField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" /></span>
+                    <span>検食者 <ComboField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={inspectors} width="w-24" /></span>
                     <span>出来上がり <FieldInput type="time" value={v.doneTime} onChange={(x) => setMeal(key, { doneTime: x })} editable={editable} width="w-28" /></span>
                   </span>
                 </td>
@@ -111,7 +113,7 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
                       予定 {data.meal_count} 人 ／ 実施{' '}
                       <FieldInput type="number" value={v.actualCount} onChange={(x) => setMeal(key, { actualCount: x })} editable={editable} width="w-16" suffix="人" />
                     </span>
-                    <span>検食日誌記録者 <ComboField value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} options={K_OPTS.cook} width="w-24" /></span>
+                    <span>検食日誌記録者 <ComboField value={v.recorder} onChange={(x) => setMeal(key, { recorder: x })} editable={editable} options={cooks} width="w-24" /></span>
                   </span>
                 </td>
               </tr>
@@ -130,9 +132,9 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
             </tr>
             <tr>
               <td className={`${B} px-2 py-1 text-sm`}>
-                調理担当者 <ComboField value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={K_OPTS.cook} width="w-24" />
+                調理担当者 <ComboField value={nz.snack.cook} onChange={(x) => setSnack({ cook: x })} editable={editable} options={cooks} width="w-24" />
                 <br />
-                検食者 <ComboField value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={K_OPTS.inspector} width="w-24" />
+                検食者 <ComboField value={nz.snack.inspector} onChange={(x) => setSnack({ inspector: x })} editable={editable} options={inspectors} width="w-24" />
               </td>
               <td className={`${B} px-2 py-1`}>{data.snack.name}</td>
               <td className={`${B} px-2 py-1 text-sm`}>
