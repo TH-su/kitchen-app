@@ -140,6 +140,13 @@
   }
   .staffweek-page {
     page: staffweek-a4;
+    /* 2週間表示では 1週=1ページ（表=1週目/裏=2週目）＝両面でA4用紙1枚に収まる。
+       最終ページのみ auto ＝末尾に空白ページを出さない（.kondate-page/.kenshoku-page と同型）。
+       1週間表示では .staffweek-page が1つ＝:last-child ＝ break-after:auto となり従来と同一出力。 */
+    break-after: page;
+  }
+  .staffweek-page:last-child {
+    break-after: auto;
   }
   .staffweek-page .staffweek-title {
     font-size: 22px;
