@@ -73,7 +73,7 @@ export interface NisshiRecord {
   snack: NisshiSnack
 }
 
-// ---- 空値ファクトリ（未入力は '' ＝印刷空欄）。天候/検食者/調理担当者の既定(晴れ/坂本/佐々木)は
+// ---- 空値ファクトリ（未入力は '' ＝印刷空欄）。天候/検食者/調理担当者の既定(晴れ/候補先頭)は
 //      種付けせず、検食時間到達時の自動反映(kAuto/nAuto)で入る＝未記入日は空欄で印刷される。 ----
 export const emptyKMeal = (): KenshokuMeal => ({
   weather: '',
@@ -148,7 +148,7 @@ function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
 
 // 検食者(inspector)は食ごとに規定が異なる（昼=既定検食者 独立／朝夕=調理担当者に連動）ため kAuto から
 // 分離し、applyKenshokuAuto 側で補完する。ここでは共通項目＋既定の調理担当者のみ。
-// 既定の担当者は候補リストの先頭（環境変数未設定なら 検食者=坂本 / 調理担当者=佐々木 で従来どおり）。
+// 既定の担当者は候補リストの先頭（環境変数 VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS で指定）。
 const kAuto = (time: string): Partial<KenshokuMeal> => ({
   time,
   weather: '晴れ',
