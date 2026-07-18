@@ -10,14 +10,17 @@
 //
 // 書式:
 //   VITE_FACILITY_NAME       施設名のみ（「厨房」は付けない）  例: サンプルホーム
-//   VITE_REPORT_INSPECTORS   検食者候補・区切りは , 、 ，       例: 検食A,検食B,検食C
-//   VITE_REPORT_COOKS        調理担当者候補（同上）             例: 調理A,調理B,調理C
+//   VITE_REPORT_INSPECTORS   検食者候補・区切りは , 、 ，       例: 検食者A,検食者B
+//   VITE_REPORT_COOKS        調理担当者候補（同上）             例: 調理A,調理B
 //
 // ⚠ VITE_ 変数はビルド時に配信JSへ埋め込まれる（＝公開される）。ソース/gitから氏名を外す効果は
 //   あるが、公開バンドルからは読み取れる。真に秘匿するならDB＋RLS経由での取得が必要。
+//
+// フォールバックは「実名を含まない汎用プレースホルダ」。自施設で使う場合は上記 Variables に
+// 実際の施設名・職員名を設定する（設定済みならフォールバックは一切使われず挙動不変）。
 
-const FALLBACK_INSPECTORS = ['検食A', '検食B', '検食C'] as const
-const FALLBACK_COOKS = ['調理A', '調理B', '調理C'] as const
+const FALLBACK_INSPECTORS = ['検食者A', '検食者B'] as const
+const FALLBACK_COOKS = ['調理A', '調理B'] as const
 const FALLBACK_FACILITY = 'サンプルホーム'
 
 // 半角/全角カンマ・読点で分割し、空白除去・空要素除去・重複除去。1件も無ければ既定値を返す。
@@ -42,6 +45,6 @@ export const REPORT_INSPECTORS = parseList(import.meta.env.VITE_REPORT_INSPECTOR
 export const REPORT_COOKS = parseList(import.meta.env.VITE_REPORT_COOKS, FALLBACK_COOKS)
 
 // 自動反映で使う既定の担当者＝各リストの先頭（parseList は常に1件以上を返す）。
-// 既定値のままなら従来どおり 検食者=検食A / 調理担当者=調理A になり挙動不変。
+// Variables 未設定時はプレースホルダ（検食者A / 調理A）が入る。自施設では Variables に実名を設定する。
 export const DEFAULT_INSPECTOR: string = REPORT_INSPECTORS[0] ?? FALLBACK_INSPECTORS[0]
 export const DEFAULT_COOK: string = REPORT_COOKS[0] ?? FALLBACK_COOKS[0]
