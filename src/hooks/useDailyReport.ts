@@ -66,7 +66,7 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
   const autoPersist = useCallback(async () => {
     const d = dataRef.current
     if (!editable || !d) return // data 無しで走らせない（phantom 行 INSERT 防止）
-    if (d.menu_date !== todayStr()) return // 当日のみ（日跨ぎで自然停止）
+    if (d.menu_date > todayStr()) return // 未来日は書かない（過去日・当日は補完対象）
     if (writeLock.current) return
     writeLock.current = true
     try {

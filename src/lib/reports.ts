@@ -172,14 +172,26 @@ const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
 
 const MEALS = ['breakfast', 'lunch', 'dinner'] as const
 
-// editable かつ menuDate＝当日 かつ 現在時刻がしきい値を過ぎた食の「未入力欄のみ」自動反映。
+// 自動反映の対象範囲。
+//   未来日 … 対象外（まだ提供していない日を埋めない。献立は先の日付まで登録済みのため必須のガード）
+//   過去日 … 1日が終了済みなので朝昼夕すべてが対象（開いた日にしか埋まらない穴を塞ぐ）
+//   当日   … しきい値（提供時刻）を過ぎた食のみ
+function autoScope(menuDate: string): { active: boolean; allMeals: boolean } {
+  const today = todayStr()
+  if (!menuDate || menuDate > today) return { active: false, allMeals: false }
+  return { active: true, allMeals: menuDate < today }
+}
+
+// editable かつ「未来日でない」日の、対象となる食の「未入力欄のみ」自動反映。
 // 判定基準は保存済み saved＝冪等・手動保存値は不可侵（先祖返り防止）。
 export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, editable: boolean): KenshokuRecord {
-  if (!editable || menuDate !== todayStr()) return saved
+  if (!editable) return saved
+  const { active, allMeals } = autoScope(menuDate)
+  if (!active) return saved
   const t = nowHHMM()
   let next = saved
   for (const m of MEALS) {
-    if (t < MEAL_THRESHOLD[m]) continue
+    if (!allMeals && t < MEAL_THRESHOLD[m]) continue
     let meal = fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m]))
     // 検食者: 元が未入力の食のみ補完。昼=既定検食者(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
     if (isEmpty(next[m].inspector)) {
@@ -190,11 +202,13 @@ export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, edita
   return next
 }
 export function applyNisshiAuto(saved: NisshiRecord, menuDate: string, editable: boolean): NisshiRecord {
-  if (!editable || menuDate !== todayStr()) return saved
+  if (!editable) return saved
+  const { active, allMeals } = autoScope(menuDate)
+  if (!active) return saved
   const t = nowHHMM()
   let next = saved
   for (const m of MEALS) {
-    if (t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m])) }
+    if (allMeals || t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m])) }
   }
   return next
 }
