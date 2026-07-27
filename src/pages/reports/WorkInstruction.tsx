@@ -20,6 +20,67 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 const numOrNull = (s: string) => (s ? Number(s) : null)
 const BORDER = 'border border-slate-400'
 
+// 印刷1ページ分の中身（1〜複数の食）
+type MealBlockData = { key: string; label: string; code: string | null; slots: DaySlot[]; R: number }
+type PageGroup = { key: string; blocks: MealBlockData[] }
+
+// 印刷の改頁単位＝現場の配布単位: 朝食 / 昼食＋おやつ / 夕食 の3ページ。
+// おやつは昼食と同じページに出すため、data.meals（朝→昼→夕）の並びから組み替える。
+// onlyFilled=true（一括印刷）は献立未設定の食をページ化しない＝白紙ページを出さない。
+//            false（単日）は従来どおり全食を描画する＝「未設定」行を消さない。
+function mealPageGroups(data: DailyMenuFull, R: number, onlyFilled: boolean): PageGroup[] {
+  const snackSlots: DaySlot[] | null = data.snack
+    ? [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]
+    : null
+  const blockOf = (m: { key: string; label: string; code: string | null; slots: DaySlot[] }): MealBlockData => ({
+    key: m.key,
+    label: m.label,
+    code: m.code,
+    slots: m.slots,
+    R,
+  })
+  const pick = (key: string): MealBlockData[] => {
+    const m = data.meals.find((x) => x.key === key)
+    if (!m || (onlyFilled && m.slots.length === 0)) return []
+    return [blockOf(m)]
+  }
+  // breakfast/lunch/dinner 以外のキーが将来増えても取りこぼさない（最終ページへ退避）
+  const known = new Set(['breakfast', 'lunch', 'dinner'])
+  const rest = data.meals.filter((m) => !known.has(m.key) && !(onlyFilled && m.slots.length === 0)).map(blockOf)
+
+  return [
+    { key: 'page-breakfast', blocks: pick('breakfast') },
+    {
+      key: 'page-lunch',
+      blocks: [
+        ...pick('lunch'),
+        // おやつの倍率は R=1 据置（自動増量の対象外）＝現行と同一
+        ...(snackSlots ? [{ key: 'snack', label: 'おやつ', code: data.snackCode, slots: snackSlots, R: 1 }] : []),
+      ],
+    },
+    { key: 'page-dinner', blocks: [...pick('dinner'), ...rest] },
+  ].filter((g) => g.blocks.length > 0)
+}
+
+// 各ページ先頭の日付ヘッダ（現場で1枚ずつ配れるよう何日分か分かるようにする）。
+// ヘッダ自身が途中で割れないよう avoid。
+function SheetHeader({ data, n }: { data: DailyMenuFull; n: number }) {
+  return (
+    <div className="break-inside-avoid">
+      <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
+        <h2 className="text-2xl font-bold">作業指示書</h2>
+        <div className="text-base">
+          <span className="mr-4 text-xl font-bold whitespace-nowrap">{slashDateWd(data.menu_date)}</span>
+          <span className="font-bold">食数 {n} 人</span>
+        </div>
+      </div>
+      <p className="text-sm text-slate-600 mb-2">
+        {KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}
+      </p>
+    </div>
+  )
+}
+
 // R=おかず増量倍率。主食・適量・おやつ(R=1渡し)は据置。kcal=その食の1人分エネルギー
 function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: string | null; slots: DaySlot[]; n: number; R: number; kcal: number }) {
   // 倍率Rが万一 NaN/Infinity でも表に NaN g を出さないよう防御（自動増量再有効化時の保険。現状R=1固定）
@@ -96,38 +157,20 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
 export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty?: boolean; bulk?: boolean }) {
   const R = nx.scaleFactor
   const scaled = R > 1
-  const snackSlots: DaySlot[] | null = data.snack
-    ? [{ slot: 'snack', label: 'おやつ', name: data.snack.name, notes: null, items: data.snack.items }]
-    : null
+  // おやつを含むページ分割は mealPageGroups() に集約（単日・一括で同一の構成にするため）
 
-  // 一括印刷: 1食=1ページ。各ページ先頭に日付・食数ヘッダを再掲（現場で1枚ずつ配れるように）。
-  // 設定済み（slots のある）食のみページ化＝未設定食で空白ページを出さない。
-  // ※単日（bulk=false）は下の従来描画のまま一切変更しない。
+  // 一括印刷: 朝食 / 昼食＋おやつ / 夕食 の3ページ。各ページ先頭に日付・食数ヘッダを再掲
+  // （現場で1枚ずつ配れるように）。設定済み（slots のある）食のみページ化＝白紙ページを出さない。
+  // 改頁は index.css の .workinstr-page .workinstr-meal-page（既存ルール）に委ねる＝CSS変更なし。
   if (bulk) {
-    const mealPages = [
-      ...data.meals
-        .filter((m) => m.slots.length > 0)
-        .map((m) => ({ key: m.key, label: m.label, code: m.code, slots: m.slots, R })),
-      ...(snackSlots ? [{ key: 'snack', label: 'おやつ', code: data.snackCode, slots: snackSlots, R: 1 }] : []),
-    ]
     return (
       <div className="text-base">
-        {mealPages.map((m) => (
-          <div key={m.key} className="workinstr-meal-page">
-            {/* 各ページ共通ヘッダ（日付・食数）。ヘッダ自身が途中で割れないよう avoid */}
-            <div className="break-inside-avoid">
-              <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
-                <h2 className="text-2xl font-bold">作業指示書</h2>
-                <div className="text-base">
-                  <span className="mr-4 text-xl font-bold whitespace-nowrap">{slashDateWd(data.menu_date)}</span>
-                  <span className="font-bold">食数 {n} 人</span>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 mb-2">
-                {KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}
-              </p>
-            </div>
-            <MealBlock label={m.label} code={m.code} slots={m.slots} n={n} R={m.R} kcal={mealKcal(m.slots, nx.grainG)} />
+        {mealPageGroups(data, R, true).map((g) => (
+          <div key={g.key} className="workinstr-meal-page">
+            <SheetHeader data={data} n={n} />
+            {g.blocks.map((m) => (
+              <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={m.R} kcal={mealKcal(m.slots, nx.grainG)} />
+            ))}
           </div>
         ))}
       </div>
@@ -169,12 +212,23 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
         </div>
       )}
 
-      {data.meals.map((m) => (
-        <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={R} kcal={mealKcal(m.slots, nx.grainG)} />
-      ))}
-      {snackSlots && (
-        <MealBlock label="おやつ" code={data.snackCode} slots={snackSlots} n={n} R={1} kcal={mealKcal(snackSlots, nx.grainG)} />
-      )}
+      {/* 印刷は 朝食 / 昼食＋おやつ / 夕食 の3ページ（一括印刷と同じ構成）。
+          改頁とヘッダ再掲は print: 限定＝画面表示のボックス構造・余白は不変。 */}
+      {(() => {
+        const groups = mealPageGroups(data, R, false)
+        return groups.map((g, i) => (
+          <div key={g.key} className={i < groups.length - 1 ? 'print:break-after-page' : undefined}>
+            {i > 0 && (
+              <div className="hidden print:block">
+                <SheetHeader data={data} n={n} />
+              </div>
+            )}
+            {g.blocks.map((m) => (
+              <MealBlock key={m.key} label={m.label} code={m.code} slots={m.slots} n={n} R={m.R} kcal={mealKcal(m.slots, nx.grainG)} />
+            ))}
+          </div>
+        ))
+      })()}
     </div>
   )
 }

@@ -95,7 +95,7 @@ export default function WorkBulkPage() {
 
       {rangeDays > 31 && (
         <p className="text-amber-700 text-sm mb-3 print:hidden bg-amber-50 border border-amber-200 rounded px-3 py-2">
-          ⚠ {rangeDays}日分を一度に表示・印刷します（1食1ページのため枚数が多くなります）。重い場合は期間を分けてください。
+          ⚠ {rangeDays}日分を一度に表示・印刷します（1日3ページのため枚数が多くなります）。重い場合は期間を分けてください。
         </p>
       )}
       {error && <p className="text-red-600 text-sm">エラー: {error}</p>}
