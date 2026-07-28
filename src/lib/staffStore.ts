@@ -14,9 +14,13 @@
 
 import { readSyncConfig, fetchRosterNames, fetchResidentCounts } from './wsClient'
 import { REPORT_INSPECTORS, REPORT_COOKS } from './facility'
+import { fetchActiveReportStaff } from './staffMaster'
 
 /** 名簿取得の状態。ok のときだけ候補へ名簿名を後置連結する。 */
 export type RosterStatus = 'idle' | 'pending' | 'ok' | 'fallback'
+
+/** 職員マスタ(report_staff)の取得状態。ok のときだけ候補をマスタ由来に切り替える。 */
+export type MasterStatus = 'idle' | 'pending' | 'ok' | 'fallback'
 
 /** 外部ストアのスナップショット（getSnapshot の戻り値・同一性を保つ）。 */
 export type StaffStoreState = {
@@ -25,10 +29,16 @@ export type StaffStoreState = {
   rosterAt: number
   counts: { residents: number; hospitalized: number } | null
   countsAt: number
+  // 職員マスタ由来の候補。null＝マスタ未取得/未作成/0件＝env フォールバック
+  masterStatus: MasterStatus
+  masterCooks: string[] | null
+  masterInspectors: string[] | null
+  masterAt: number
 }
 
 const ROSTER_TTL_MS = 30 * 60 * 1000 // 30分
 const COUNTS_TTL_MS = 10 * 60 * 1000 // 10分
+const MASTER_TTL_MS = 5 * 60 * 1000 // 5分（マスタ編集後は refreshMaster() で即時反映する）
 
 // 現在のスナップショット。変更時のみ差し替え、同一性を保つ（無限再レンダー防止）。
 let state: StaffStoreState = {
@@ -37,6 +47,10 @@ let state: StaffStoreState = {
   rosterAt: 0,
   counts: null,
   countsAt: 0,
+  masterStatus: 'idle',
+  masterCooks: null,
+  masterInspectors: null,
+  masterAt: 0,
 }
 
 const listeners = new Set<() => void>()
@@ -53,7 +67,11 @@ function setState(patch: Partial<StaffStoreState>): void {
     next.rosterNames === state.rosterNames &&
     next.rosterAt === state.rosterAt &&
     next.counts === state.counts &&
-    next.countsAt === state.countsAt
+    next.countsAt === state.countsAt &&
+    next.masterStatus === state.masterStatus &&
+    next.masterCooks === state.masterCooks &&
+    next.masterInspectors === state.masterInspectors &&
+    next.masterAt === state.masterAt
   ) {
     return
   }
@@ -166,12 +184,60 @@ export function refreshNow(): Promise<void> {
   return Promise.all([runRoster(true), runCounts(true)]).then(() => undefined)
 }
 
+// ---- 職員マスタ（report_staff）取得: 単一飛行 + TTL 5分 ----
+
+let masterInFlight: Promise<void> | null = null
+
+async function doResolveMaster(): Promise<void> {
+  try {
+    const rows = await fetchActiveReportStaff()
+    // null＝テーブル未作成（0007 未適用）／0件＝まだ登録なし。どちらも env フォールバックにする。
+    if (!rows || rows.length === 0) {
+      setState({ masterStatus: 'fallback', masterCooks: null, masterInspectors: null, masterAt: Date.now() })
+      return
+    }
+    setState({
+      masterStatus: 'ok',
+      masterCooks: rows.filter((r) => r.is_cook).map((r) => r.name),
+      masterInspectors: rows.filter((r) => r.is_inspector).map((r) => r.name),
+      masterAt: Date.now(),
+    })
+  } catch {
+    // 通信・権限エラーは env フォールバック（氏名は console へ出さない）
+    setState({ masterStatus: 'fallback', masterCooks: null, masterInspectors: null, masterAt: Date.now() })
+  }
+}
+
+function runMaster(force: boolean): Promise<void> {
+  if (!force && state.masterAt > 0 && Date.now() - state.masterAt < MASTER_TTL_MS) return Promise.resolve()
+  if (masterInFlight) return masterInFlight
+  if (state.masterStatus === 'idle') setState({ masterStatus: 'pending' })
+  masterInFlight = doResolveMaster().finally(() => {
+    masterInFlight = null
+  })
+  return masterInFlight
+}
+
+/** マスタ取得（TTL内なら何もしない・単一飛行）。 */
+export function resolveMaster(): Promise<void> {
+  return runMaster(false)
+}
+
+/** マスタ編集後の即時再取得（TTL を無視）。 */
+export function refreshMaster(): Promise<void> {
+  return runMaster(true)
+}
+
 /**
  * コンボボックスの候補（検食簿・給食日誌の検食者/調理担当者/記録者）。
  *
- * 【確定仕様・広げないこと】候補は施設設定（env）で定義した職員に限定する。
- *   調理担当者 … REPORT_COOKS のみ
- *   検食者     … REPORT_INSPECTORS ＋ REPORT_COOKS（調理員も検食を行うため）
+ * 【確定仕様・広げないこと】
+ *   調理担当者 … 調理員のみ
+ *   検食者     … 検食者 ＋ 調理員（調理員も検食を行うため）
+ *
+ * 供給元は職員マスタ(report_staff) 優先で、マスタ未作成/0件/取得失敗のときは
+ * 施設設定（env: VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS）にフォールバックする
+ * ＝マイグレーション未適用でも現行と完全同一の候補になる。
  *
  * シフト職員名簿（rosterNames）は候補へ連結しない。連結すると連携が成立した時点で
  * 全職員が選択可能になり、帳票の記入者が意図せず広がるため（2026-07-27 の指示で撤去）。
@@ -179,8 +245,10 @@ export function refreshNow(): Promise<void> {
  * ※候補は入力補助であり、ComboField は候補外の自由記載・保存済みの値をそのまま保持する。
  */
 export function candidates(): { inspectors: string[]; cooks: string[] } {
+  const cooks = state.masterCooks ?? [...REPORT_COOKS]
+  const inspectorsOnly = state.masterInspectors ?? [...REPORT_INSPECTORS]
   return {
-    inspectors: dedupe([...REPORT_INSPECTORS, ...REPORT_COOKS]),
-    cooks: [...REPORT_COOKS],
+    inspectors: dedupe([...inspectorsOnly, ...cooks]),
+    cooks: dedupe(cooks),
   }
 }

@@ -13,6 +13,7 @@ import NisshiBulkPage from './pages/NisshiBulkPage'
 import SimulatePage from './pages/SimulatePage'
 import StaffWeekPage from './pages/StaffWeekPage'
 import WsSettingsPage from './pages/WsSettingsPage'
+import StaffMasterPage from './pages/StaffMasterPage'
 import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -67,7 +68,14 @@ function AppShell() {
           <p className="text-emerald-100 text-xs">{KITCHEN_LABEL}</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* 連携設定への小さな歯車リンク。ヘッダーは print:hidden 済みのため印刷影響なし */}
+          {/* 職員マスタ・連携設定への小さなリンク。ヘッダーは print:hidden 済みのため印刷影響なし */}
+          <NavLink
+            to="/staff-master"
+            title="職員マスタ（検食者・調理員の候補）"
+            className={({ isActive }) => `text-sm ${isActive ? 'text-white font-medium' : 'text-emerald-100'}`}
+          >
+            👤 職員
+          </NavLink>
           <NavLink
             to="/ws-settings"
             title="連携設定"
@@ -97,6 +105,7 @@ function AppShell() {
             <Route path="/kenshoku-print" element={<KenshokuBulkPage />} />
             <Route path="/nisshi-print" element={<NisshiBulkPage />} />
             <Route path="/simulate" element={<SimulatePage />} />
+            <Route path="/staff-master" element={<StaffMasterPage />} />
             <Route path="/ws-settings" element={<WsSettingsPage />} />
             <Route path="/new" element={<NewMenuSetPage />} />
           </Routes>

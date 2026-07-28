@@ -12,7 +12,7 @@ import {
 } from '../../lib/reports'
 import { useDailyReport } from '../../hooks/useDailyReport'
 import { useStaffCandidates } from '../../hooks/useStaffCandidates'
-import { RadioInline, FieldInput, ComboField, SealBox } from './ReportFields'
+import { RadioInline, FieldInput, ComboField, MirrorField, SealBox } from './ReportFields'
 
 const B = 'border border-slate-400'
 
@@ -74,6 +74,8 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
       {data.meals.map((m) => {
         const key = m.key as 'breakfast' | 'lunch' | 'dinner'
         const v = nz[key]
+        // 朝食・夕食は調理担当者本人が検食するため検食者を連動（表示専用）。昼食は検食者を選択する。
+        const linkInspector = key !== 'lunch'
         return (
           <table key={m.key} className="w-full border-collapse mb-3 break-inside-avoid">
             <tbody>
@@ -87,8 +89,14 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
                 <td className={`${B} px-2 py-1 align-top text-sm`}>
                   調理担当者
                   <br />
-                  {/* 調理担当者を変えると検食日誌記録者も連動（検食者は独立） */}
-                  <ComboField value={v.cook} onChange={(x) => setMeal(key, { cook: x, recorder: x })} editable={editable} options={cooks} width="w-24" />
+                  {/* 調理担当者を変えると検食日誌記録者が連動。朝夕はさらに検食者も同名に連動（昼は独立） */}
+                  <ComboField
+                    value={v.cook}
+                    onChange={(x) => setMeal(key, linkInspector ? { cook: x, recorder: x, inspector: x } : { cook: x, recorder: x })}
+                    editable={editable}
+                    options={cooks}
+                    width="w-24"
+                  />
                 </td>
                 <td className={`${B} px-2 py-1`}>{m.slots.length ? m.slots.map((s) => s.name).join('／') : '未設定'}</td>
                 <td className={`${B} px-2 py-1 text-sm whitespace-nowrap`}>
@@ -103,7 +111,11 @@ export default function Nisshi({ data, editable, reload, bulk = false }: ReportP
               <tr>
                 <td className={`${B} px-2 py-1 text-sm`} colSpan={2}>
                   <span className="inline-flex items-center gap-x-4 gap-y-1 flex-wrap">
-                    <span>検食者 <ComboField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={inspectors} width="w-24" /></span>
+                    {/* 朝夕は調理担当者に連動する表示専用。値は保存済み inspector を出す
+                        ＝過去に inspector≠cook で保存された記録を画面/印刷/保存で改変しない */}
+                    <span>検食者 {linkInspector
+                      ? <MirrorField value={v.inspector} width="w-24" />
+                      : <ComboField value={v.inspector} onChange={(x) => setMeal(key, { inspector: x })} editable={editable} options={inspectors} width="w-24" />}</span>
                     <span>出来上がり <FieldInput type="time" value={v.doneTime} onChange={(x) => setMeal(key, { doneTime: x })} editable={editable} width="w-28" /></span>
                   </span>
                 </td>

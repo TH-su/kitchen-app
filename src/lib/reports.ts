@@ -161,11 +161,12 @@ const kAuto = (time: string): Partial<KenshokuMeal> => ({
   foreign: 'なし',
   cook: DEFAULT_COOK,
 })
+// 検食者(inspector)は検食簿と同じく食ごとに規定が異なる（昼=既定検食者 独立／朝夕=調理担当者に連動）
+// ため nAuto から分離し、applyNisshiAuto 側で補完する。
 const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
   doneTime,
   tempMain: '90',
   tempSide: '90',
-  inspector: DEFAULT_INSPECTOR,
   cook: DEFAULT_COOK,
   recorder: DEFAULT_COOK,
 })
@@ -208,7 +209,13 @@ export function applyNisshiAuto(saved: NisshiRecord, menuDate: string, editable:
   const t = nowHHMM()
   let next = saved
   for (const m of MEALS) {
-    if (allMeals || t >= MEAL_THRESHOLD[m]) next = { ...next, [m]: fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m])) }
+    if (!allMeals && t < MEAL_THRESHOLD[m]) continue
+    let meal = fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m]))
+    // 検食者: 元が未入力の食のみ補完。昼=既定検食者(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
+    if (isEmpty(next[m].inspector)) {
+      meal = { ...meal, inspector: m === 'lunch' ? DEFAULT_INSPECTOR : meal.cook }
+    }
+    next = { ...next, [m]: meal }
   }
   return next
 }

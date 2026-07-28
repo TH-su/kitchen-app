@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import { candidates, getSnapshot, resolveRoster, subscribe } from '../lib/staffStore'
+import { candidates, getSnapshot, resolveMaster, resolveRoster, subscribe } from '../lib/staffStore'
 
 // 帳票コンボの職員候補（検食者/調理担当者）をシフト由来の名簿で拡張して供給する薄いフック。
 //
@@ -24,7 +24,9 @@ export function useStaffCandidates(): StaffCandidates {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot)
 
   // 取得は副作用として1度だけ促す（重複呼び出しはストアの単一飛行で吸収される）。
+  // 候補の供給元は職員マスタ（resolveMaster）。roster は在籍者数・連携設定の表示用で候補には混ぜない。
   useEffect(() => {
+    void resolveMaster()
     void resolveRoster()
   }, [])
 
