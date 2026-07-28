@@ -167,18 +167,20 @@ export function refreshNow(): Promise<void> {
 }
 
 /**
- * コンボボックスの候補。
- * facility.ts の env 既定値を先頭に、rosterStatus==='ok' かつ名簿が非空のときだけ
- * 名簿名を後置連結して重複除去する。fallback/pending/idle 時は env のみ＝現行と完全同一。
+ * コンボボックスの候補（検食簿・給食日誌の検食者/調理担当者/記録者）。
+ *
+ * 【確定仕様・広げないこと】候補は施設設定（env）で定義した職員に限定する。
+ *   調理担当者 … REPORT_COOKS のみ
+ *   検食者     … REPORT_INSPECTORS ＋ REPORT_COOKS（調理員も検食を行うため）
+ *
+ * シフト職員名簿（rosterNames）は候補へ連結しない。連結すると連携が成立した時点で
+ * 全職員が選択可能になり、帳票の記入者が意図せず広がるため（2026-07-27 の指示で撤去）。
+ * 名簿は在籍者数の表示・連携設定画面の件数表示にのみ使う。
+ * ※候補は入力補助であり、ComboField は候補外の自由記載・保存済みの値をそのまま保持する。
  */
 export function candidates(): { inspectors: string[]; cooks: string[] } {
-  const inspectors = [...REPORT_INSPECTORS]
-  const cooks = [...REPORT_COOKS]
-  if (state.rosterStatus === 'ok' && state.rosterNames && state.rosterNames.length > 0) {
-    return {
-      inspectors: dedupe([...inspectors, ...state.rosterNames]),
-      cooks: dedupe([...cooks, ...state.rosterNames]),
-    }
+  return {
+    inspectors: dedupe([...REPORT_INSPECTORS, ...REPORT_COOKS]),
+    cooks: [...REPORT_COOKS],
   }
-  return { inspectors, cooks }
 }
