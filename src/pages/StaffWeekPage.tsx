@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fetchDailyMenusRangeLite, type DailyMenuFull } from '../lib/daily'
-import { KITCHEN_LABEL } from '../lib/facility'
+import { useKitchenLabel } from '../hooks/useKitchenLabel'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 
@@ -55,6 +55,7 @@ function namesOf(d: DailyMenuFull | undefined, key: string): string[] {
 
 export default function StaffWeekPage() {
   const nav = useNavigate()
+  const kitchenLabel = useKitchenLabel() // 施設名はDB(app_settings)由来。未取得時は env→汎用表記
   const [pick, setPick] = useState(mondayOf(todayStr()))
   const [weekStart, setWeekStart] = useState(mondayOf(todayStr()))
   // 既定2週間＝2ページ＝A4両面1枚。1週間を選べば従来と同一の1ページ出力
@@ -137,7 +138,7 @@ export default function StaffWeekPage() {
                   週間献立表<span className="print:hidden">（職員確認用）</span>
                 </h2>
                 <p className="text-sm text-slate-600">
-                  {KITCHEN_LABEL}　{ws} 〜 {addDays(ws, 6)}
+                  {kitchenLabel}　{ws} 〜 {addDays(ws, 6)}
                 </p>
               </div>
               <table className="staffweek-table w-full border-collapse text-sm">

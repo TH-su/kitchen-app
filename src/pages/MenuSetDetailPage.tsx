@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { fetchMenuSetDetail, fetchAllIngredientNames, fetchIngredientKcalMap, fetchMenuSets, type MenuSetDetail } from '../lib/queries'
-import { KITCHEN_LABEL } from '../lib/facility'
+import { useKitchenLabel } from '../hooks/useKitchenLabel'
 import {
   updateDishName,
   saveDishRecipe,
@@ -49,6 +49,7 @@ export default function MenuSetDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
   const { editable } = useAuth()
+  const kitchenLabel = useKitchenLabel() // 施設名はDB(app_settings)由来。未取得時は env→汎用表記
   const { data, loading, error, reload } = useLoader(
     () => (id ? fetchMenuSetDetail(Number(id)) : Promise.resolve(null)),
     [id]
@@ -268,7 +269,7 @@ export default function MenuSetDetailPage() {
         </div>
       </div>
       <div className="hidden print:block mb-3 text-sm text-slate-600">
-        {KITCHEN_LABEL}　印刷日: {new Date().toLocaleDateString('ja-JP')}
+        {kitchenLabel}　印刷日: {new Date().toLocaleDateString('ja-JP')}
       </div>
       <div className="flex items-center gap-2 mb-3">
         <button

@@ -2,7 +2,9 @@
 // 保存先は daily_menus.kenshoku / daily_menus.nisshi（jsonb・様式まるごと1オブジェクト）。
 // 数値も string 保持（入力中間状態を許容。表示も string で往復）。
 import { todayStr, nowHHMM } from './date'
-import { REPORT_INSPECTORS, REPORT_COOKS, DEFAULT_INSPECTOR, DEFAULT_COOK } from './facility'
+import { REPORT_INSPECTORS, REPORT_COOKS } from './facility'
+// 自動反映の既定担当者は職員マスタ優先（env はフォールバック）。呼び出しのたびに評価する。
+import { defaults } from './staffStore'
 
 // ---- 選択肢（正典の順序＝画面/印刷の並び順） ----
 // 検食者/調理担当者は環境変数で差し替え可（未設定なら従来の既定値。詳細は lib/facility.ts）
@@ -148,7 +150,11 @@ function fillEmpty<T extends object>(base: T, auto: Partial<T>): T {
 
 // 検食者(inspector)は食ごとに規定が異なる（昼=既定検食者 独立／朝夕=調理担当者に連動）ため kAuto から
 // 分離し、applyKenshokuAuto 側で補完する。ここでは共通項目＋既定の調理担当者のみ。
-// 既定の担当者は候補リストの先頭（環境変数 VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS で指定）。
+// 既定の担当者は staffStore.defaults()＝職員マスタ(report_staff)の先頭。マスタ未作成/未取得のときだけ
+// 環境変数（VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS）の先頭へフォールバックし、どちらも無ければ
+// 空文字＝fillEmpty が欄を空のまま残す（プレースホルダを記録に残さない）。
+// ★kAuto/nAuto は呼び出しのたびに defaults() を評価する（モジュール読み込み時に固定すると、
+//   ログイン後に届いたマスタが反映されないため）。
 const kAuto = (time: string): Partial<KenshokuMeal> => ({
   time,
   weather: '晴れ',
@@ -159,17 +165,20 @@ const kAuto = (time: string): Partial<KenshokuMeal> => ({
   freshness: '特によい',
   plating: '特によい',
   foreign: 'なし',
-  cook: DEFAULT_COOK,
+  cook: defaults().cook,
 })
 // 検食者(inspector)は検食簿と同じく食ごとに規定が異なる（昼=既定検食者 独立／朝夕=調理担当者に連動）
 // ため nAuto から分離し、applyNisshiAuto 側で補完する。
-const nAuto = (doneTime: string): Partial<NisshiMeal> => ({
-  doneTime,
-  tempMain: '90',
-  tempSide: '90',
-  cook: DEFAULT_COOK,
-  recorder: DEFAULT_COOK,
-})
+const nAuto = (doneTime: string): Partial<NisshiMeal> => {
+  const cook = defaults().cook
+  return {
+    doneTime,
+    tempMain: '90',
+    tempSide: '90',
+    cook,
+    recorder: cook,
+  }
+}
 
 const MEALS = ['breakfast', 'lunch', 'dinner'] as const
 
@@ -196,7 +205,7 @@ export function applyKenshokuAuto(saved: KenshokuRecord, menuDate: string, edita
     let meal = fillEmpty(next[m], kAuto(MEAL_THRESHOLD[m]))
     // 検食者: 元が未入力の食のみ補完。昼=既定検食者(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
     if (isEmpty(next[m].inspector)) {
-      meal = { ...meal, inspector: m === 'lunch' ? DEFAULT_INSPECTOR : meal.cook }
+      meal = { ...meal, inspector: m === 'lunch' ? defaults().inspector : meal.cook }
     }
     next = { ...next, [m]: meal }
   }
@@ -213,7 +222,7 @@ export function applyNisshiAuto(saved: NisshiRecord, menuDate: string, editable:
     let meal = fillEmpty(next[m], nAuto(MEAL_THRESHOLD[m]))
     // 検食者: 元が未入力の食のみ補完。昼=既定検食者(独立)、朝夕=調理担当者に連動（確定後の cook を写す）。
     if (isEmpty(next[m].inspector)) {
-      meal = { ...meal, inspector: m === 'lunch' ? DEFAULT_INSPECTOR : meal.cook }
+      meal = { ...meal, inspector: m === 'lunch' ? defaults().inspector : meal.cook }
     }
     next = { ...next, [m]: meal }
   }

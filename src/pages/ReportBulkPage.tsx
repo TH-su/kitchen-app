@@ -4,6 +4,7 @@ import { todayStr } from '../lib/date'
 import { useLoader } from '../hooks/useLoader'
 import { useAuth } from '../hooks/useAuth'
 import { backfillReports } from '../lib/backfill'
+import { resolveMaster } from '../lib/staffStore'
 
 // 検食簿・給食日誌に共通の画面枠（両者は操作・レイアウトが同一のため1本化して食い違いを防ぐ）。
 //   記入モード（既定）… 単日のみ表示。前日/当日/翌日ボタン＋カレンダーで移動し、その場で編集・自動保存。
@@ -92,6 +93,9 @@ export default function ReportBulkPage({
     setResult(null)
     setProgress({ done: 0, total: targets.length })
     try {
+      // 既定の担当者は職員マスタ由来（staffStore.defaults()）。マスタ未取得のまま一括補完すると
+      // 担当者欄だけ空のまま保存されるため、先に取得を確定させる（単一飛行・TTL はストア側）。
+      await resolveMaster()
       const r = await backfillReports({
         dates: targets,
         column,

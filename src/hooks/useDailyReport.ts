@@ -8,10 +8,11 @@
 // 【先祖返り防止の核心】
 //   autosave の payload は必ず「DBの最新保存値 + 自動反映」から作り、画面 state（手動編集・書きかけ
 //   テキストを含む）からは絶対に作らない。表示への注入も「DBで空 ∧ 自動値あり ∧ 画面でも空」に限定する。
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { fetchReportColumn, saveDailyReport, type DailyMenuFull } from '../lib/daily'
 import { isEmpty } from '../lib/reports'
 import { todayStr } from '../lib/date'
+import { getMasterAt, resolveMaster, subscribe } from '../lib/staffStore'
 
 type Col = 'kenshoku' | 'nisshi'
 
@@ -50,6 +51,10 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
   applyAuto: (saved: T, menuDate: string, editable: boolean) => T
 }) {
   const { data, editable, reload, column, empty, merge, applyAuto } = cfg
+
+  // 既定の担当者は職員マスタ(report_staff)由来（reports.ts の applyAuto → staffStore.defaults()）。
+  // マスタはログイン後に非同期で届くため、その時刻を購読して自動反映をやり直す（下の (a2)）。
+  const masterAt = useSyncExternalStore(subscribe, getMasterAt)
 
   const [v, setV] = useState<T>(empty)
   const [saving, setSaving] = useState(false)
@@ -97,6 +102,22 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     void autoPersist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.menu_date, data?.id, editable])
+
+  // (a2) 職員マスタが後から届いた時の再適用。
+  //   applyAuto の既定担当者はマスタ由来のため、(a) の時点でマスタ未取得だと担当者だけが空のまま残る。
+  //   ★ここで setV(applyAuto(...)) を直接やってはいけない（入力中の値を巻き戻す）。autoPersist 経由なら
+  //     基底はDBの最新値、画面への注入は mergeNewAutoFields（DBで空 ∧ 自動値あり ∧ 画面でも空）に
+  //     限定されるため、手動編集・書きかけ・手動クリアを一切潰さない。
+  //   マスタ取得自体もここで促す（単一飛行・TTL はストア側。useStaffCandidates と重複しても吸収される）。
+  useEffect(() => {
+    void resolveMaster()
+  }, [])
+  useEffect(() => {
+    if (!editable) return
+    if (!masterAt) return // 未取得のうちは (a) の結果のまま（env フォールバック）
+    void autoPersist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [masterAt, editable, data?.menu_date, data?.id])
 
   // (b) しきい値跨ぎ（例 07:49 に開いたまま 07:50 になる）を 60 秒ごとに反映＋保存
   useEffect(() => {

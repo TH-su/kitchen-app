@@ -18,7 +18,7 @@ import LoginPage from './pages/LoginPage'
 import LoginBar from './components/LoginBar'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useAuth } from './hooks/useAuth'
-import { KITCHEN_LABEL } from './lib/facility'
+import { useKitchenLabel } from './hooks/useKitchenLabel'
 
 function Tab({ to, children }: { to: string; children: ReactNode }) {
   return (
@@ -50,6 +50,14 @@ function Nav() {
   )
 }
 
+// ヘッダの施設名表記。ログイン後にDB（app_settings）から届いた値へ差し替わる（未取得時は
+// env→汎用表記）。ログイン済みの枝でだけマウントされるよう小コンポーネントに切り出している
+// ＝ログイン前に取得を試みない（RLS で読めないため）。DOM・クラスは従来と同一。
+function KitchenLabelLine() {
+  const label = useKitchenLabel()
+  return <p className="text-emerald-100 text-xs">{label}</p>
+}
+
 // 認証ゲート: ready 待ち→未ログインは LoginPage→ログイン済みのみアプリ本体
 function AppShell() {
   const { session, ready } = useAuth()
@@ -65,7 +73,7 @@ function AppShell() {
       <header className="bg-emerald-700 text-white px-4 py-3 shadow print:hidden flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold">厨房メニュー管理</h1>
-          <p className="text-emerald-100 text-xs">{KITCHEN_LABEL}</p>
+          <KitchenLabelLine />
         </div>
         <div className="flex items-center gap-3">
           {/* 職員マスタ・連携設定への小さなリンク。ヘッダーは print:hidden 済みのため印刷影響なし */}

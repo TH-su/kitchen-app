@@ -13,7 +13,7 @@
 //   現行（静的リスト）と完全に同一の候補・並びになる（rosterStatus==='ok' のときだけ後置連結）。
 
 import { readSyncConfig, fetchRosterNames, fetchResidentCounts } from './wsClient'
-import { REPORT_INSPECTORS, REPORT_COOKS } from './facility'
+import { REPORT_INSPECTORS, REPORT_COOKS, DEFAULT_INSPECTOR, DEFAULT_COOK } from './facility'
 import { fetchActiveReportStaff } from './staffMaster'
 
 /** 名簿取得の状態。ok のときだけ候補へ名簿名を後置連結する。 */
@@ -90,6 +90,14 @@ export function subscribe(listener: () => void): () => void {
 /** useSyncExternalStore 用: 現在のスナップショット（同一性保持）。 */
 export function getSnapshot(): StaffStoreState {
   return state
+}
+
+/**
+ * マスタ取得の完了時刻（0＝未取得）。プリミティブなので useSyncExternalStore の
+ * getSnapshot にそのまま渡せる（「マスタが届いた」ことだけを購読したい呼び出し側用）。
+ */
+export function getMasterAt(): number {
+  return state.masterAt
 }
 
 function dedupe(names: string[]): string[] {
@@ -251,4 +259,22 @@ export function candidates(): { inspectors: string[]; cooks: string[] } {
     inspectors: dedupe([...inspectorsOnly, ...cooks]),
     cooks: dedupe(cooks),
   }
+}
+
+/**
+ * 自動反映（reports.ts の kAuto/nAuto）が使う既定の担当者。
+ *
+ * 供給元は candidates() と同じく職員マスタ(report_staff) 優先で、各リストの先頭を採る
+ * （マスタの sort_order → id 順＝管理画面の並びの1人目）。マスタ未取得/未作成/0件のときだけ
+ * env（VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS）の先頭へフォールバックする。
+ *
+ * どちらも無いときは '' を返す。reports.ts の fillEmpty は空文字を入れても欄を空のままにするため、
+ * プレースホルダ（検食者A / 調理A）を帳票へ書き込まずに済む。
+ *
+ * ※ 呼び出しのたびに評価すること（モジュール読み込み時に固定すると、後から届いたマスタが反映されない）。
+ */
+export function defaults(): { inspector: string; cook: string } {
+  const inspector = state.masterInspectors ? state.masterInspectors[0] : DEFAULT_INSPECTOR
+  const cook = state.masterCooks ? state.masterCooks[0] : DEFAULT_COOK
+  return { inspector: inspector ?? '', cook: cook ?? '' }
 }

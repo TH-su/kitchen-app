@@ -13,7 +13,7 @@ import {
 } from '../../lib/daily'
 import MenuSelect from '../../components/MenuSelect'
 import { slashDateWd } from '../../lib/date'
-import { KITCHEN_LABEL } from '../../lib/facility'
+import { useKitchenLabel } from '../../hooks/useKitchenLabel'
 import type { ReportProps } from './types'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -65,6 +65,7 @@ function mealPageGroups(data: DailyMenuFull, R: number, onlyFilled: boolean): Pa
 // 各ページ先頭の日付ヘッダ（現場で1枚ずつ配れるよう何日分か分かるようにする）。
 // ヘッダ自身が途中で割れないよう avoid。
 function SheetHeader({ data, n }: { data: DailyMenuFull; n: number }) {
+  const kitchenLabel = useKitchenLabel() // 施設名はDB(app_settings)由来。未取得時は env→汎用表記
   return (
     <div className="break-inside-avoid">
       <div className="flex items-end justify-between mb-2 border-b-2 border-slate-700 pb-1">
@@ -75,7 +76,7 @@ function SheetHeader({ data, n }: { data: DailyMenuFull; n: number }) {
         </div>
       </div>
       <p className="text-sm text-slate-600 mb-2">
-        {KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}
+        {kitchenLabel}{data.note ? `　/　${data.note}` : ''}
       </p>
     </div>
   )
@@ -155,6 +156,7 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
 
 // bulk=true: 一括印刷ページ用（個別の印刷ボタン・未保存バッジを出さない）
 export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: DailyMenuFull; n: number; nx: DailyNutritionEx; dirty?: boolean; bulk?: boolean }) {
+  const kitchenLabel = useKitchenLabel() // 施設名はDB(app_settings)由来。フックは早期 return より前で呼ぶ
   const R = nx.scaleFactor
   const scaled = R > 1
   // おやつを含むページ分割は mealPageGroups() に集約（単日・一括で同一の構成にするため）
@@ -187,7 +189,7 @@ export function WorkSheet({ data, n, nx, dirty = false, bulk = false }: { data: 
         </div>
       </div>
       <div className="flex items-center justify-between mb-2 gap-3">
-        <p className="text-sm text-slate-600">{KITCHEN_LABEL}{data.note ? `　/　${data.note}` : ''}</p>
+        <p className="text-sm text-slate-600">{kitchenLabel}{data.note ? `　/　${data.note}` : ''}</p>
         {!bulk && (
           <div className="flex items-center gap-2">
             {dirty && (

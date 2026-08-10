@@ -16,6 +16,13 @@
 //
 // ⚠ VITE_ 変数はビルド時に配信JSへ埋め込まれる（＝公開される）。ソース/gitから氏名を外す効果は
 //   あるが、公開バンドルからは読み取れる。真に秘匿するならDB＋RLS経由での取得が必要。
+//   2026-08-10: 配信中の dist/assets/index-*.js に職員6名の実名と施設名が実際に含まれることを実測で確認。
+//   これを受けて氏名・施設名の供給元をDB（ログイン必須・RLS authenticated 限定）へ移した:
+//     職員名 … report_staff（0007）→ lib/staffMaster.ts → staffStore.candidates()/defaults()
+//     施設名 … app_settings.facility_name（0009）→ lib/appSettings.ts → hooks/useKitchenLabel()
+//   運用: GitHub Actions Variables から VITE_REPORT_INSPECTORS / VITE_REPORT_COOKS を削除する
+//   （施設名 VITE_FACILITY_NAME も削除可。ログイン画面だけは DB を読めないため汎用表記になる）。
+//   本ファイルの env は**互換のためのフォールバック**として残す＝DB未適用でも画面は壊れない。
 //
 // フォールバックは「実名を含まない汎用プレースホルダ」。自施設で使う場合は上記 Variables に
 // 実際の施設名・職員名を設定する（設定済みならフォールバックは一切使われず挙動不変）。
@@ -45,10 +52,12 @@ export const REPORT_INSPECTORS = parseList(import.meta.env.VITE_REPORT_INSPECTOR
 /** 調理担当者の候補（コンボボックスの選択肢） */
 export const REPORT_COOKS = parseList(import.meta.env.VITE_REPORT_COOKS, FALLBACK_COOKS)
 
-// 自動反映で使う既定の担当者＝各リストの先頭（parseList は常に1件以上を返す）。
-// Variables 未設定時はプレースホルダ（検食者A / 調理A）が入る。自施設では Variables に実名を設定する。
-export const DEFAULT_INSPECTOR: string = REPORT_INSPECTORS[0] ?? FALLBACK_INSPECTORS[0]
-export const DEFAULT_COOK: string = REPORT_COOKS[0] ?? FALLBACK_COOKS[0]
+// 自動反映で使う既定の担当者の env フォールバック（実際の供給元は職員マスタ＝staffStore.defaults()）。
+// ★候補リスト（REPORT_*）と違い、Variables 未設定時は**空文字**にする。プレースホルダ（検食者A /
+//   調理A）を帳票の記録として書き込まないため（reports.ts の fillEmpty は空文字なら欄を空のまま残す）。
+//   コンボの選択肢はプレースホルダのままで、選択肢が空になることはない。
+export const DEFAULT_INSPECTOR: string = parseList(import.meta.env.VITE_REPORT_INSPECTORS, [])[0] ?? ''
+export const DEFAULT_COOK: string = parseList(import.meta.env.VITE_REPORT_COOKS, [])[0] ?? ''
 
 // 施設長印の画像URL。実名入りの印影をリポジトリへ同梱すると、公開バンドルへ base64 で
 // 埋め込まれて配信されるため、ソースには一切持たせない（2026-08-10 に同梱PNGを削除）。
