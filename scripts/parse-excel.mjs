@@ -13,9 +13,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const DATA_DIR = join(ROOT, 'data')
 
-const SRC =
-  process.env.EXCEL_PATH ||
-  '/Volumes/【サンプルホーム共有】/【厨房】/【10. 厨房】/作業指示書R8年度/献立・作業指示書（改良版） .xlsx'
+// 取込元Excelの場所は施設ごとに異なるため直書きしない。EXCEL_PATH で指定する。
+//   例) EXCEL_PATH="/path/to/献立・作業指示書.xlsx" node scripts/parse-excel.mjs
+const SRC = process.env.EXCEL_PATH || join(DATA_DIR, '献立・作業指示書.xlsx')
 
 // ---- ユーティリティ ----
 const CIRCLED =

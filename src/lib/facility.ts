@@ -12,6 +12,7 @@
 //   VITE_FACILITY_NAME       施設名のみ（「厨房」は付けない）  例: サンプルホーム
 //   VITE_REPORT_INSPECTORS   検食者候補・区切りは , 、 ，       例: 検食者A,検食者B
 //   VITE_REPORT_COOKS        調理担当者候補（同上）             例: 調理A,調理B
+//   VITE_SEAL_URL            施設長印の画像URL（未設定なら押印枠は空欄＝手押し運用）
 //
 // ⚠ VITE_ 変数はビルド時に配信JSへ埋め込まれる（＝公開される）。ソース/gitから氏名を外す効果は
 //   あるが、公開バンドルからは読み取れる。真に秘匿するならDB＋RLS経由での取得が必要。
@@ -48,3 +49,8 @@ export const REPORT_COOKS = parseList(import.meta.env.VITE_REPORT_COOKS, FALLBAC
 // Variables 未設定時はプレースホルダ（検食者A / 調理A）が入る。自施設では Variables に実名を設定する。
 export const DEFAULT_INSPECTOR: string = REPORT_INSPECTORS[0] ?? FALLBACK_INSPECTORS[0]
 export const DEFAULT_COOK: string = REPORT_COOKS[0] ?? FALLBACK_COOKS[0]
+
+// 施設長印の画像URL。実名入りの印影をリポジトリへ同梱すると、公開バンドルへ base64 で
+// 埋め込まれて配信されるため、ソースには一切持たせない（2026-08-10 に同梱PNGを削除）。
+// 未設定なら押印枠は空欄のまま印字される＝従来どおり枠の大きさ・位置は不変で、手押しで運用できる。
+export const SEAL_URL: string = (import.meta.env.VITE_SEAL_URL ?? '').trim()

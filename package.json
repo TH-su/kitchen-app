@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "サンプルホーム厨房 メニュー管理アプリ (Vite + React + Supabase)",
+  "description": "厨房メニュー管理アプリ (Vite + React + Supabase)",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
