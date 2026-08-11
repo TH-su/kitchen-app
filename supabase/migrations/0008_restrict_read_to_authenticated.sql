@@ -28,6 +28,7 @@ begin
     'food_composition','ingredients','menu_sets','dishes','dish_ingredients','daily_menus'
   ] loop
     execute format('drop policy if exists "read_all" on %I;', t);
+    execute format('drop policy if exists "read_auth" on %I;', t); -- 再実行できるように既存も落とす
     execute format('create policy "read_auth" on %I for select to authenticated using (true);', t);
   end loop;
 end $$;
