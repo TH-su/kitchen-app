@@ -2,7 +2,7 @@
 // 画面=入力コントロール / 印刷=紙様式どおりの確定値（選択は丸＋太字・未入力は空欄）。
 // 全て Tailwind の print: ユーティリティで完結＝index.css は変更しない。
 import { useEffect, useId, useRef, useState } from 'react'
-import { SEAL_URL } from '../../lib/facility'
+import { useSealSrc } from '../../hooks/useSealSrc'
 
 const B = 'border border-slate-400'
 
@@ -343,15 +343,18 @@ export function NoteField({
   )
 }
 
-// 施設長/調理員の押印枠。stamped かつ src があれば印影画像を表示（時刻計算で stamped を渡す）。画面/印刷共通。
-// 既定の印影は環境変数 VITE_SEAL_URL（facility.ts の SEAL_URL）から読む。未設定なら枠だけを印字する
-// ＝枠の寸法・位置は従来のまま変わらず、手押しで運用できる。実名入りPNGの同梱は公開配信されるため行わない。
-export function SealBox({ label, stamped = false, src = SEAL_URL }: { label: string; stamped?: boolean; src?: string }) {
+// 施設長/調理員の押印枠。stamped かつ印影があれば画像を表示（時刻計算で stamped を渡す）。画面/印刷共通。
+// 印影の供給元は app_settings.seal_image（0009・RLS は read も authenticated 限定）＝ログイン後に届く。
+// 未登録なら環境変数 VITE_SEAL_URL、それも無ければ枠だけを印字する＝枠の寸法・位置は従来のまま変わらず、
+// 手押しで運用できる。実名入りPNGの同梱は公開バンドルへ base64 で焼き込まれ配信されるため行わない。
+export function SealBox({ label, stamped = false, src }: { label: string; stamped?: boolean; src?: string }) {
+  const dbSeal = useSealSrc()
+  const imgSrc = src ?? dbSeal
   return (
     <div className="flex flex-col items-center">
       <span className="text-xs text-slate-600">{label}</span>
       <div className="w-16 h-16 border border-slate-500 rounded flex items-center justify-center overflow-hidden">
-        {stamped && src && <img src={src} alt="" aria-hidden decoding="async" className="w-14 h-14 object-contain select-none" />}
+        {stamped && imgSrc && <img src={imgSrc} alt="" aria-hidden decoding="async" className="w-14 h-14 object-contain select-none" />}
       </div>
     </div>
   )
