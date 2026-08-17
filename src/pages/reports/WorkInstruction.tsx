@@ -19,6 +19,8 @@ import type { ReportProps } from './types'
 const round1 = (n: number) => Math.round(n * 10) / 10
 const numOrNull = (s: string) => (s ? Number(s) : null)
 const BORDER = 'border border-slate-400'
+// 料理（主食・副食・汁物…）の切れ目に引く太罫線。同じ料理の食材どうしは細罫線のまま
+const DISH_LINE = 'border-t-2 border-t-slate-700'
 
 // 印刷1ページ分の中身（1〜複数の食）
 type MealBlockData = { key: string; label: string; code: string | null; slots: DaySlot[]; R: number }
@@ -88,7 +90,8 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
   const safeR = Number.isFinite(R) ? R : 1
   return (
     <div className="mb-4 break-inside-avoid">
-      <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 px-2 py-1 flex items-baseline justify-between gap-2">
+      {/* 食の見出し（朝食など）の下は、料理の切れ目(2px)より一段太い3pxで区切る */}
+      <h3 className="text-lg font-bold bg-slate-100 border border-slate-400 border-b-[3px] border-b-slate-700 px-2 py-1 flex items-baseline justify-between gap-2">
         <span>
           {label}
           {code ? `（${code}）` : '（未設定）'}
@@ -100,12 +103,13 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
       ) : (
         <table className="w-full border-collapse text-base">
           <thead>
+            {/* 見出し行の上罫線は落とす＝h3 の3px線と重ならないようにする */}
             <tr className="bg-slate-50">
-              <th className={`${BORDER} px-2 py-1 text-left w-44`}>料理</th>
-              <th className={`${BORDER} px-2 py-1 text-left`}>食材</th>
-              <th className={`${BORDER} px-2 py-1 text-right w-20`}>1人分</th>
-              <th className={`${BORDER} px-2 py-1 text-right w-28`}>総量(×{n})</th>
-              <th className={`${BORDER} px-2 py-1 text-left w-44`}>調理メモ</th>
+              <th className={`${BORDER} border-t-0 px-2 py-1 text-left w-44`}>料理</th>
+              <th className={`${BORDER} border-t-0 px-2 py-1 text-left`}>食材</th>
+              <th className={`${BORDER} border-t-0 px-2 py-1 text-right w-20`}>1人分</th>
+              <th className={`${BORDER} border-t-0 px-2 py-1 text-right w-28`}>総量(×{n})</th>
+              <th className={`${BORDER} border-t-0 px-2 py-1 text-left w-44`}>調理メモ</th>
             </tr>
           </thead>
           <tbody>
@@ -113,24 +117,26 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
               s.items.length ? (
                 s.items.map((it, i) => {
                   const sp = scaledPerPerson(it.perPerson, s.slot, safeR)
+                  // 料理の1行目だけ上罫線を太くする＝料理どうしの切れ目が一目で分かる
+                  const top = i === 0 ? DISH_LINE : ''
                   return (
                   <tr key={s.slot + i}>
                     {i === 0 && (
-                      <td rowSpan={s.items.length} className={`${BORDER} px-2 py-1 align-top font-semibold`}>
+                      <td rowSpan={s.items.length} className={`${BORDER} ${top} px-2 py-1 align-top font-semibold`}>
                         {s.name}
                       </td>
                     )}
-                    <td className={`${BORDER} px-2 py-1`}>{it.name}</td>
-                    <td className={`${BORDER} px-2 py-1 text-right text-slate-600`}>
+                    <td className={`${BORDER} ${top} px-2 py-1`}>{it.name}</td>
+                    <td className={`${BORDER} ${top} px-2 py-1 text-right text-slate-600`}>
                       {sp != null ? `${round1(sp)} g` : '適量'}
                     </td>
                     {/* 総量: 画面は数値表示・印刷時のみテキストを透明化（枠線/列幅は border-slate-400・w-28 のまま不変）。
                         現場配布の紙は手書き記入欄として空にする。数値確認はアプリ画面(@media screen)で行う運用 */}
-                    <td className={`${BORDER} px-2 py-1 text-right font-medium print:text-transparent`}>
+                    <td className={`${BORDER} ${top} px-2 py-1 text-right font-medium print:text-transparent`}>
                       {sp != null ? `${round1(sp * n)} g` : '適量'}
                     </td>
                     {i === 0 && (
-                      <td rowSpan={s.items.length} className={`${BORDER} px-2 py-1 align-top text-sm text-slate-600`}>
+                      <td rowSpan={s.items.length} className={`${BORDER} ${top} px-2 py-1 align-top text-sm text-slate-600`}>
                         {s.notes ?? ''}
                       </td>
                     )}
@@ -139,11 +145,11 @@ function MealBlock({ label, code, slots, n, R, kcal }: { label: string; code: st
                 })
               ) : (
                 <tr key={s.slot}>
-                  <td className={`${BORDER} px-2 py-1 font-semibold`}>{s.name}</td>
-                  <td className={`${BORDER} px-2 py-1 text-slate-400`} colSpan={3}>
+                  <td className={`${BORDER} ${DISH_LINE} px-2 py-1 font-semibold`}>{s.name}</td>
+                  <td className={`${BORDER} ${DISH_LINE} px-2 py-1 text-slate-400`} colSpan={3}>
                     （材料データなし）
                   </td>
-                  <td className={`${BORDER} px-2 py-1 text-sm text-slate-600`}>{s.notes ?? ''}</td>
+                  <td className={`${BORDER} ${DISH_LINE} px-2 py-1 text-sm text-slate-600`}>{s.notes ?? ''}</td>
                 </tr>
               )
             )}
