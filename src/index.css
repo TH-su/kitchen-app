@@ -222,3 +222,82 @@
     contain-intrinsic-size: auto 1100px;
   }
 }
+
+/* 献立一覧（セット一覧）: A4縦の一覧表で印刷。固有クラス .menuset-print ＋ 固有 @page menuset-a4 ＝
+   A3献立(kondate-a3/.kondate-page)・作業指示書(.workinstr-page)・週間表(staffweek-a4)・既定@page の
+   いずれとも別セレクタ／別名前付きページのため一切競合しない。追加のみで既存印刷は不変。
+   体裁を素のCSSでここに集約している（Tailwindユーティリティを使わない）のは、印刷面の正本を1箇所にして
+   紙面検証（ヘッドレス印刷）と実装のズレを無くすため。 */
+@media print {
+  @page menuset-a4 {
+    size: A4 portrait;
+    /* 上下を詰めて1枚あたりの行数を稼ぐ。8mm は一般的なプリンタのハード余白(5mm前後)の内側で安全。
+       左右10mm は品名の折返しを減らすため上下より広く取る */
+    margin: 8mm 10mm;
+  }
+  .menuset-print {
+    page: menuset-a4;
+    /* main の p-3(0.75rem) を打ち消し、紙面の上端・左右から詰めて始める。
+       .menuset-print 配下限定＝他帳票の main まわりは不変 */
+    margin: -0.75rem;
+    color: #000;
+  }
+  /* 見出し行（カテゴリ名／件数・印刷日）は1行に収めて縦を消費しない */
+  .menuset-print-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 0 0 1.5mm;
+  }
+  .menuset-print-head h2 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .menuset-print-head span {
+    font-size: 11px;
+  }
+  .menuset-print table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+  /* 2枚目に渡った時も列見出しを再掲する */
+  .menuset-print thead {
+    display: table-header-group;
+  }
+  /* 1セット＝1行。行の途中で改ページさせない */
+  .menuset-print tr {
+    break-inside: avoid;
+  }
+  .menuset-print th,
+  .menuset-print td {
+    border: 1px solid #000;
+    padding: 1px 4px;
+    line-height: 1.25;
+    vertical-align: middle;
+    /* 長い品名でもセル外へ切れず折り返す（行が縦に伸びるだけ・列幅は不変） */
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .menuset-print thead th {
+    background: #e5e7eb;
+    text-align: center;
+    font-weight: 700;
+  }
+  .menuset-print td:first-child {
+    text-align: center;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  /* 列幅（table-layout:fixed）: セット番号は最小、品名は残り全部を1列で使う。
+     スロット別に6列へ割ると「ごはん」等の短い品名の列に余白が死に、長い品名が毎行折り返して
+     1枚に25行しか入らないことを紙面実測で確認したため、画面と同じ「/ 連結の1行」に揃えている */
+  .menuset-print th:nth-child(1) { width: 10%; }
+  .menuset-print th:nth-child(2) { width: 90%; }
+  /* 件数に応じた動的文字サイズ（A4縦1枚に収める。しきい値は紙面実測で決定）。
+     c を下限としこれ以上は縮めない＝読めない紙にせず2枚目へ送る */
+  .menuset-print[data-density='a'] table { font-size: 15px; }
+  .menuset-print[data-density='b'] table { font-size: 13px; }
+  .menuset-print[data-density='c'] table { font-size: 11.5px; }
+}

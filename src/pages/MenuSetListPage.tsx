@@ -4,6 +4,8 @@ import { fetchCategories, fetchMenuSets } from '../lib/queries'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../hooks/useAuth'
+import { slashDateWd, todayStr } from '../lib/date'
+import { menuPrintDensity } from '../lib/printFit'
 
 export default function MenuSetListPage() {
   const nav = useNavigate()
@@ -32,10 +34,16 @@ export default function MenuSetListPage() {
   )
   useRealtime(['menu_sets', 'dishes', 'dish_ingredients'], reload)
   const items = data ?? []
+  // 印刷面の1行分（画面カード2行目と同じ連結式）。文字サイズ段階の見積りと表描画で共用する
+  const printRows = items.map((m) => ({
+    id: m.id,
+    code: m.code,
+    line: [m.staple, m.main, m.side1, m.side2, m.soup].filter(Boolean).join(' / '),
+  }))
 
   return (
     <div>
-      <div className="flex flex-wrap gap-1.5 mb-3 items-center">
+      <div className="flex flex-wrap gap-1.5 mb-3 items-center print:hidden">
         {cats.map((c) => (
           <button
             key={c}
@@ -70,12 +78,21 @@ export default function MenuSetListPage() {
             ＋新規
           </button>
         )}
+        {/* 表示中カテゴリの一覧をそのままA4縦で印刷（他帳票と同じ window.print() 方式） */}
+        <button
+          onClick={() => window.print()}
+          disabled={items.length === 0}
+          title="表示中のカテゴリの献立一覧をA4縦で印刷します"
+          className="inline-flex items-center justify-center px-4 min-h-[44px] rounded-full text-sm font-medium bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+        >
+          🖨 印刷（A4縦）
+        </button>
       </div>
-      {(catError || error) && <p className="text-red-600 text-sm mb-2">エラー: {catError || error}</p>}
+      {(catError || error) && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {catError || error}</p>}
       {loading ? (
-        <p className="text-slate-500">読み込み中…</p>
+        <p className="text-slate-500 print:hidden">読み込み中…</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 print:hidden">
           {items.map((m) => (
             <button
               key={m.id}
@@ -91,6 +108,37 @@ export default function MenuSetListPage() {
           ))}
           {items.length === 0 && <p className="text-slate-400">データなし</p>}
         </div>
+      )}
+
+      {/* 印刷面（A4縦・画面には出さない）。表示中カテゴリの全件を1行1セットの表で並べる。
+          体裁は index.css の .menuset-print 配下に集約（列幅・罫線・動的文字サイズ）。
+          0件のときは描画しない＝白紙1枚が出るのを防ぐ */}
+      {items.length > 0 && (
+        <section className="menuset-print hidden print:block" data-density={menuPrintDensity(printRows.map((r) => r.line))}>
+          <div className="menuset-print-head">
+            <h2>献立一覧　{active}</h2>
+            <span>
+              全{items.length}件　{slashDateWd(todayStr())}
+            </span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>セット</th>
+                <th>献立（主食 / メイン / 副菜① / 副菜② / 汁物）</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printRows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.code}</td>
+                  {/* 画面カード2行目と同じ連結＝紙も画面も「そのまま」同じ並び */}
+                  <td>{r.line}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
     </div>
   )
