@@ -8,16 +8,18 @@
 //   UNITS_PER_LINE … 印刷CSSと同じ幅(190mm)でレンダリングし、折り返しが始まる文字数を計測
 //   CHAR_* … 上記で「/」「空白」の実幅が全角の約1/4だったため区別（全角前提で数えると過大評価になる）
 //   AVAIL_PX … ヘッドレス印刷したPDFのページ数を二分探索し、1枚に収まった最大の積み上げ高さ
+//     （実測の収容件数: 品名が短いカテゴリで 15px=40件 / 13px=54件 / 11.5px=64件、
+//       全件が最長級でも 26件 / 38件 / 44件）
 // 印刷CSS（列幅・余白・line-height・パディング・段階の文字サイズ）を変えたら測り直すこと。
 // 検証ハーネス: scratchpad の print/{gen.mjs,run.sh,sweep.sh,probe2.mjs} が本ファイルを直接 import する。
 
 export type PrintDensity = 'a' | 'b' | 'c'
 
 const FONT_PX: Record<PrintDensity, number> = { a: 15, b: 13, c: 11.5 }
-// 「献立」列（紙面幅190mmの90% ≒ 645px）に1行で入る文字数（全角=1換算）
-const UNITS_PER_LINE: Record<PrintDensity, number> = { a: 42, b: 48, c: 55 }
-// 表の行に使える紙面の高さ(px)。段階ごとに列見出しの高さが違うため段階別に持つ
-const AVAIL_PX: Record<PrintDensity, number> = { a: 994, b: 1001, c: 1007 }
+// 「献立」列（2列組みなので紙面幅190mmの41% ≒ 294px）に1行で入る文字数（全角=1換算）
+const UNITS_PER_LINE: Record<PrintDensity, number> = { a: 18, b: 21, c: 24 }
+// 表に使える紙面の高さ(px)。実測の収容件数から逆算した値（2列組み・見出し固定11px）
+const AVAIL_PX: Record<PrintDensity, number> = { a: 1053, b: 1007, c: 1016 }
 const LINE_HEIGHT = 1.25 // index.css の .menuset-print td/th と同値
 const ROW_EXTRA_PX = 3 // 1行あたりの上下パディング(1px×2)＋罫線(1px)
 
@@ -35,15 +37,18 @@ export function textUnits(s: string): number {
   return n
 }
 
-// 各行の「献立」文字列から、A4縦1枚に収まる最大の文字サイズ段階を返す。
+// 各セットの「献立」文字列から、A4縦1枚に収まる最大の文字サイズ段階を返す。
+// 紙面は画面と同じ2列組み（左→右→次の行）なので、2件で1行。行の高さは左右で高い方に決まる。
 // どの段階でも収まらなければ最小段階(c)で止め、それ以上は縮めず2枚目へ送る（読めない紙を作らない）。
 export function menuPrintDensity(lines: string[]): PrintDensity {
   for (const d of ['a', 'b', 'c'] as const) {
     const lineH = FONT_PX[d] * LINE_HEIGHT
-    const used = lines.reduce((sum, s) => {
-      const wrapped = Math.max(1, Math.ceil(textUnits(s) / UNITS_PER_LINE[d]))
-      return sum + wrapped * lineH + ROW_EXTRA_PX
-    }, 0)
+    const wrapOf = (s: string) => Math.max(1, Math.ceil(textUnits(s) / UNITS_PER_LINE[d]))
+    let used = 0
+    for (let i = 0; i < lines.length; i += 2) {
+      const rows = Math.max(wrapOf(lines[i]), lines[i + 1] === undefined ? 1 : wrapOf(lines[i + 1]))
+      used += rows * lineH + ROW_EXTRA_PX
+    }
     if (used <= AVAIL_PX[d]) return d
   }
   return 'c'

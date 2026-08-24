@@ -40,6 +40,9 @@ export default function MenuSetListPage() {
     code: m.code,
     line: [m.staple, m.main, m.side1, m.side2, m.soup].filter(Boolean).join(' / '),
   }))
+  // 画面の一覧（2列カード）と同じ並び順で紙にも組む＝左→右→次の行
+  const printPairs: Array<[(typeof printRows)[number], (typeof printRows)[number] | undefined]> = []
+  for (let i = 0; i < printRows.length; i += 2) printPairs.push([printRows[i], printRows[i + 1]])
 
   return (
     <div>
@@ -126,14 +129,18 @@ export default function MenuSetListPage() {
               <tr>
                 <th>セット</th>
                 <th>献立（主食 / メイン / 副菜① / 副菜② / 汁物）</th>
+                <th>セット</th>
+                <th>献立（主食 / メイン / 副菜① / 副菜② / 汁物）</th>
               </tr>
             </thead>
             <tbody>
-              {printRows.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.code}</td>
-                  {/* 画面カード2行目と同じ連結＝紙も画面も「そのまま」同じ並び */}
-                  <td>{r.line}</td>
+              {printPairs.map(([left, right]) => (
+                <tr key={left.id}>
+                  {/* セル内容は画面カードと同じ連結＝紙も画面も同じ並び。奇数件の最後は右側を空欄にする */}
+                  <td>{left.code}</td>
+                  <td>{left.line}</td>
+                  <td>{right ? right.code : ''}</td>
+                  <td>{right ? right.line : ''}</td>
                 </tr>
               ))}
             </tbody>

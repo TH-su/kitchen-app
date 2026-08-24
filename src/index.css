@@ -284,17 +284,27 @@
     background: #e5e7eb;
     text-align: center;
     font-weight: 700;
+    /* 見出しだけは段階に連動させず固定。2列組みで列が狭く、本文と同じ大きさだと
+       スロット名の並びが2行に折れて縦を無駄に食うため（本文の可読性には影響しない） */
+    font-size: 11px;
+    line-height: 1.2;
   }
-  .menuset-print td:first-child {
+  .menuset-print td:nth-child(1),
+  .menuset-print td:nth-child(3) {
     text-align: center;
     font-weight: 700;
     white-space: nowrap;
   }
-  /* 列幅（table-layout:fixed）: セット番号は最小、品名は残り全部を1列で使う。
-     スロット別に6列へ割ると「ごはん」等の短い品名の列に余白が死に、長い品名が毎行折り返して
-     1枚に25行しか入らないことを紙面実測で確認したため、画面と同じ「/ 連結の1行」に揃えている */
-  .menuset-print th:nth-child(1) { width: 10%; }
-  .menuset-print th:nth-child(2) { width: 90%; }
+  /* 列幅（table-layout:fixed）: 画面の一覧と同じ2列組み（左→右→次の行）。
+     1組＝「セット番号 ＋ 品名を / 連結した1行」。スロット別に列を割ると短い品名の列で余白が死に、
+     長い品名が毎行折り返して行数が入らないことを紙面実測で確認したため、画面と同じ連結表記にしている */
+  .menuset-print th:nth-child(1),
+  .menuset-print th:nth-child(3) { width: 9%; }
+  .menuset-print th:nth-child(2),
+  .menuset-print th:nth-child(4) { width: 41%; }
+  /* 左右の組の境目だけ罫線を太くし、どこで折り返して読むかを迷わせない */
+  .menuset-print th:nth-child(3),
+  .menuset-print td:nth-child(3) { border-left-width: 2px; }
   /* 件数に応じた動的文字サイズ（A4縦1枚に収める。しきい値は紙面実測で決定）。
      c を下限としこれ以上は縮めない＝読めない紙にせず2枚目へ送る */
   .menuset-print[data-density='a'] table { font-size: 15px; }
