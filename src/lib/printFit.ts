@@ -11,7 +11,10 @@
 //     （実測の収容件数: 品名が短いカテゴリで 15px=40件 / 13px=54件 / 11.5px=64件、
 //       全件が最長級でも 26件 / 38件 / 44件）
 // 印刷CSS（列幅・余白・line-height・パディング・段階の文字サイズ）を変えたら測り直すこと。
-// 検証ハーネス: scratchpad の print/{gen.mjs,run.sh,sweep.sh,probe2.mjs} が本ファイルを直接 import する。
+// 測り直しの手順: ①印刷CSSの @media print を @media all に読み替え、紙面と同じ幅（A4縦なら
+// 210mm − @page 左右余白）の器でレンダリングして、折り返しが始まる文字数と行の高さを測る
+// （Chrome の --dump-dom で offsetHeight を回収できる）②同じ紙面を --print-to-pdf でPDF化し、
+// pdfinfo のページ数が2になる件数を二分探索して AVAIL_PX を逆算する。
 
 export type PrintDensity = 'a' | 'b' | 'c'
 
