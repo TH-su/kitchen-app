@@ -27,6 +27,22 @@ select t.ok('9-4 戻した後: 施設・会員の表が無い',
   to_regclass('public.facilities') is null and to_regclass('public.facility_members') is null);
 select t.ok('9-5 戻した後: 既存データが残っている',
   (select count(*) from daily_menus) = 1 and (select count(*) from dish_ingredients) = 1 and (select count(*) from app_settings) = 1);
+select t.eq('9-12 戻した後: 表どうしの外部キーは1列・0010 と同じ名前で12本（on delete も 0001 と同じ）', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 1
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)
+     and ((c.conname in ('dishes_owner_menu_set_fkey','dish_ingredients_dish_fkey') and c.confdeltype = 'c')
+       or (c.conname = 'dish_ingredients_ingredient_fkey' and c.confdeltype = 'a')
+       or (c.conname in ('menu_sets_staple_dish_fkey','menu_sets_main_dish_fkey','menu_sets_side1_dish_fkey',
+                         'menu_sets_side2_dish_fkey','menu_sets_soup_dish_fkey','daily_menus_breakfast_set_fkey',
+                         'daily_menus_lunch_set_fkey','daily_menus_dinner_set_fkey','daily_menus_snack_dish_fkey')
+           and c.confdeltype = 'n' and c.confdelsetcols is null))), 12);
+select t.eq('9-13 戻した後: 3表を指す外部キーはその12本だけ（2列のものも重複も無い）', (
+  select count(*) from pg_constraint c where c.contype = 'f'
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)), 12);
+select t.ok('9-14 戻した後: ログインした人は食品成分表に書ける権限が戻っている（0009 までと同じ）',
+  has_table_privilege('authenticated', 'public.food_composition', 'INSERT')
+  and has_table_privilege('authenticated', 'public.food_composition', 'UPDATE')
+  and has_table_privilege('authenticated', 'public.food_composition', 'DELETE'));
 select t.fails('9-6 戻した後: 日付の一意は全体に戻る', $$insert into daily_menus (menu_date) values ('2099-01-01')$$);
 begin;
 set local role authenticated;
@@ -36,6 +52,8 @@ insert into daily_menus (menu_date) values ('2099-06-01') on conflict (menu_date
 select t.eq('9-8 戻した後: 旧来の upsert（onConflict: menu_date）が通る', (select count(*) from daily_menus where menu_date = '2099-06-01'), 1);
 select replace_dish_recipe(current_setting('t.a_dish')::bigint, format('[{"ingredient_id": %s, "amount_g": 5}]', current_setting('t.a_ing'))::jsonb);
 select t.eq('9-9 戻した後: replace_dish_recipe が動く', (select count(*) from dish_ingredients where amount_g = 5), 1);
+select t.affects('9-15 戻した後: ログインした人は食品成分表を直せる（0009 までと同じ）',
+  $$update food_composition set energy_kcal = energy_kcal where food_code = 'T0001'$$, 1);
 rollback;
 begin;
 set local role anon;
@@ -47,3 +65,9 @@ rollback;
 select t.ok('9-11 戻した後に 0010 を当て直せる（既存データは既定の施設へ）',
   (select count(*) from daily_menus where facility_id = t.fd()) = 1 and
   (select count(*) from facility_members where facility_id = t.fd()) >= 2);
+select t.eq('9-16 当て直した後: 表どうしの外部キーは12本とも2列に戻る', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 2
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)), 12);
+select t.eq('9-17 当て直した後: 3表を指す1列の外部キーは無い', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 1
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)), 0);

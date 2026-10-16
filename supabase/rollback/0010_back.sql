@@ -7,6 +7,8 @@
 -- ★画面の upsert（onConflict）も 0010 の前の版に戻すこと（facility_id の列が無くなるため、
 --   新しい画面のままだと献立・食材の保存が失敗する）。手順は DEPLOY.md。
 -- ★施設・会員の表は消える（会員の登録は残らない）。
+-- ★表どうしの外部キーは1列に戻るが、名前は 0010 の名前のまま（0001 の自動命名には戻さない）。
+--   画面は制約名で埋め込みを指定しているため、名前を戻すと画面の読み込みが失敗する。
 -- =====================================================================
 
 begin;
@@ -69,6 +71,56 @@ drop policy if exists "admin_update" on public.food_composition;
 drop policy if exists "admin_delete" on public.food_composition;
 drop policy if exists "write_auth"   on public.food_composition;
 create policy "write_auth" on public.food_composition for all to authenticated using (true) with check (true);
+-- 0010 が剥がした書き込みの権限を Supabase の既定（anon・authenticated に全部）へ戻す
+grant insert, update, delete, truncate on public.food_composition to anon, authenticated;
+
+-- 2b. 表どうしの参照を1列の外部キーへ戻す（on delete は 0001 と同じ）。
+--     制約名は 0010 と同じ名前のまま＝画面の埋め込み（table!制約名(...)）が戻した後も解決する。
+--     親の unique (id, facility_id) を子の2列の外部キーが参照しているので、先に子を落としてから親を落とす。
+do $$
+declare r record;
+begin
+  for r in
+    select * from (values
+      ('dishes',           'owner_menu_set_id', 'menu_sets',   'dishes_owner_menu_set_fkey',      'on delete cascade'),
+      ('menu_sets',        'staple_dish_id',    'dishes',      'menu_sets_staple_dish_fkey',      'on delete set null'),
+      ('menu_sets',        'main_dish_id',      'dishes',      'menu_sets_main_dish_fkey',        'on delete set null'),
+      ('menu_sets',        'side1_dish_id',     'dishes',      'menu_sets_side1_dish_fkey',       'on delete set null'),
+      ('menu_sets',        'side2_dish_id',     'dishes',      'menu_sets_side2_dish_fkey',       'on delete set null'),
+      ('menu_sets',        'soup_dish_id',      'dishes',      'menu_sets_soup_dish_fkey',        'on delete set null'),
+      ('dish_ingredients', 'dish_id',           'dishes',      'dish_ingredients_dish_fkey',      'on delete cascade'),
+      ('dish_ingredients', 'ingredient_id',     'ingredients', 'dish_ingredients_ingredient_fkey', ''),
+      ('daily_menus',      'breakfast_set_id',  'menu_sets',   'daily_menus_breakfast_set_fkey',  'on delete set null'),
+      ('daily_menus',      'lunch_set_id',      'menu_sets',   'daily_menus_lunch_set_fkey',      'on delete set null'),
+      ('daily_menus',      'dinner_set_id',     'menu_sets',   'daily_menus_dinner_set_fkey',     'on delete set null'),
+      ('daily_menus',      'snack_dish_id',     'dishes',      'daily_menus_snack_dish_fkey',     'on delete set null')
+    ) v(child, col, parent, conname, act)
+  loop
+    execute format('alter table public.%I drop constraint if exists %I', r.child, r.conname);
+  end loop;
+  alter table public.menu_sets   drop constraint if exists menu_sets_id_facility_key;
+  alter table public.dishes      drop constraint if exists dishes_id_facility_key;
+  alter table public.ingredients drop constraint if exists ingredients_id_facility_key;
+  for r in
+    select * from (values
+      ('dishes',           'owner_menu_set_id', 'menu_sets',   'dishes_owner_menu_set_fkey',      'on delete cascade'),
+      ('menu_sets',        'staple_dish_id',    'dishes',      'menu_sets_staple_dish_fkey',      'on delete set null'),
+      ('menu_sets',        'main_dish_id',      'dishes',      'menu_sets_main_dish_fkey',        'on delete set null'),
+      ('menu_sets',        'side1_dish_id',     'dishes',      'menu_sets_side1_dish_fkey',       'on delete set null'),
+      ('menu_sets',        'side2_dish_id',     'dishes',      'menu_sets_side2_dish_fkey',       'on delete set null'),
+      ('menu_sets',        'soup_dish_id',      'dishes',      'menu_sets_soup_dish_fkey',        'on delete set null'),
+      ('dish_ingredients', 'dish_id',           'dishes',      'dish_ingredients_dish_fkey',      'on delete cascade'),
+      ('dish_ingredients', 'ingredient_id',     'ingredients', 'dish_ingredients_ingredient_fkey', ''),
+      ('daily_menus',      'breakfast_set_id',  'menu_sets',   'daily_menus_breakfast_set_fkey',  'on delete set null'),
+      ('daily_menus',      'lunch_set_id',      'menu_sets',   'daily_menus_lunch_set_fkey',      'on delete set null'),
+      ('daily_menus',      'dinner_set_id',     'menu_sets',   'daily_menus_dinner_set_fkey',     'on delete set null'),
+      ('daily_menus',      'snack_dish_id',     'dishes',      'daily_menus_snack_dish_fkey',     'on delete set null')
+    ) v(child, col, parent, conname, act)
+  loop
+    execute format('alter table public.%I add constraint %I foreign key (%I) references public.%I (id) %s',
+                   r.child, r.conname, r.col, r.parent, r.act);
+  end loop;
+end $$;
 
 -- 3. 一意を全体へ戻す（0001・0007・0009 と同じ名前）
 alter table public.app_settings drop constraint if exists app_settings_pkey;

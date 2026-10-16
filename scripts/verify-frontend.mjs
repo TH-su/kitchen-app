@@ -24,7 +24,7 @@ console.log('✓ anon read OK / カテゴリ種類:', [...new Set(cats.map((r) =
 const { data: list, error: e2 } = await sb
   .from('menu_sets')
   .select(
-    'id,code,category, staple:staple_dish_id(name), main:main_dish_id(name), side1:side1_dish_id(name), side2:side2_dish_id(name), soup:soup_dish_id(name)'
+    'id,code,category, staple:dishes!menu_sets_staple_dish_fkey(name), main:dishes!menu_sets_main_dish_fkey(name), side1:dishes!menu_sets_side1_dish_fkey(name), side2:dishes!menu_sets_side2_dish_fkey(name), soup:dishes!menu_sets_soup_dish_fkey(name)'
   )
   .eq('category', '魚')
   .order('seq_no', { ascending: true, nullsFirst: false })
@@ -39,7 +39,7 @@ for (const m of list)
 // 3) 詳細クエリ（レシピ展開）魚⑨
 const { data: f9, error: e3 } = await sb
   .from('menu_sets')
-  .select('code, main:main_dish_id(name, dish_ingredients(amount_g,sort_order, ingredients(name)))')
+  .select('code, main:dishes!menu_sets_main_dish_fkey(name, dish_ingredients(amount_g,sort_order, ingredients(name)))')
   .eq('code', '魚⑨')
   .single()
 if (e3) throw e3

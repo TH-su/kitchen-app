@@ -7,7 +7,7 @@
 
 -- ── 試験用の道具（care-backend の試験と同じ形） ──
 create schema t;
-grant usage on schema t to anon, authenticated;
+grant usage on schema t to anon, authenticated, service_role;
 
 create function t.eq(label text, got bigint, want bigint) returns void language plpgsql as $$
 begin
@@ -30,6 +30,34 @@ begin
     return;
   end;
   raise warning 'FAIL % (拒否されなかった)', label;
+end $$;
+
+create function t.fails_with(label text, stmt text, want_state text) returns void language plpgsql as $$
+begin
+  begin
+    execute stmt;
+  exception when others then
+    if sqlstate = want_state then
+      raise notice 'PASS % (%: %)', label, sqlstate, left(sqlerrm, 60);
+    else
+      raise warning 'FAIL % (別の理由で断られた %: %)', label, sqlstate, left(sqlerrm, 60);
+    end if;
+    return;
+  end;
+  raise warning 'FAIL % (拒否されなかった)', label;
+end $$;
+
+-- エラーの形（状態コード・文面・詳細の数字を伏せたもの）。断られなければ null
+create function t.errsig(stmt text) returns text language plpgsql as $$
+declare st text; msg text; det text;
+begin
+  begin
+    execute stmt;
+  exception when others then
+    get stacked diagnostics st = returned_sqlstate, msg = message_text, det = pg_exception_detail;
+    return st || ' | ' || regexp_replace(msg, '[0-9]+', 'N', 'g') || ' | ' || regexp_replace(coalesce(det, ''), '[0-9]+', 'N', 'g');
+  end;
+  return null;
 end $$;
 
 create function t.affects(label text, stmt text, want bigint) returns void language plpgsql as $$
@@ -64,7 +92,7 @@ create function t.unone() returns uuid language sql immutable as $$ select '0000
 create function t.uboth() returns uuid language sql immutable as $$ select '00000000-0000-4000-8000-0000000000d1'::uuid $$; -- 2施設の会員
 create function t.uadm()  returns uuid language sql immutable as $$ select '00000000-0000-4000-8000-0000000000e1'::uuid $$; -- 施設Bの admin
 
-grant execute on all functions in schema t to anon, authenticated;
+grant execute on all functions in schema t to anon, authenticated, service_role;
 
 -- ═════ 0. 移行の結果（既存データ・既存利用者） ═════
 select t.eq('0-1 既定の施設が1つだけできている', (select count(*) from facilities), 1);
@@ -108,13 +136,38 @@ select t.eq('0-13 0010 の再実行で、外した会員が戻らない',
   (select count(*) from facility_members where user_id = '00000000-0000-4000-8000-0000000000a3'), 0);
 select t.eq('0-14 0010 の再実行で施設が増えない', (select count(*) from facilities), 1);
 
+select t.ok('0-15 1人1施設: facility_members の user_id に一意の索引がある', exists (
+  select 1 from pg_index i where i.indrelid = 'public.facility_members'::regclass and i.indisunique
+     and i.indnatts = 1 and i.indkey[0] = (select attnum from pg_attribute
+       where attrelid = 'public.facility_members'::regclass and attname = 'user_id')));
+select t.eq('0-16 参照される3表に unique (id, facility_id) がある', (
+  select count(*) from pg_constraint where contype = 'u'
+     and conname in ('menu_sets_id_facility_key','dishes_id_facility_key','ingredients_id_facility_key')), 3);
+select t.eq('0-17 表どうしの外部キーは12本とも2列（参照先 id, facility_id）', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 2
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)
+     and c.conname in ('dishes_owner_menu_set_fkey','menu_sets_staple_dish_fkey','menu_sets_main_dish_fkey',
+       'menu_sets_side1_dish_fkey','menu_sets_side2_dish_fkey','menu_sets_soup_dish_fkey','dish_ingredients_dish_fkey',
+       'dish_ingredients_ingredient_fkey','daily_menus_breakfast_set_fkey','daily_menus_lunch_set_fkey',
+       'daily_menus_dinner_set_fkey','daily_menus_snack_dish_fkey')), 12);
+select t.eq('0-18 3表を指す1列の外部キーが残っていない', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 1
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)), 0);
+select t.eq('0-19 on delete の意味が 0001 と同じ（cascade 2・no action 1・set null 9）', (
+  select count(*) from pg_constraint c where c.contype = 'f' and array_length(c.conkey, 1) = 2
+     and c.confrelid in ('public.menu_sets'::regclass, 'public.dishes'::regclass, 'public.ingredients'::regclass)
+     and ((c.conname in ('dishes_owner_menu_set_fkey','dish_ingredients_dish_fkey') and c.confdeltype = 'c')
+       or (c.conname = 'dish_ingredients_ingredient_fkey' and c.confdeltype = 'a')
+       or (c.confdeltype = 'n' and array_length(c.confdelsetcols, 1) = 1
+           and c.confdelsetcols[1] = c.conkey[1]))), 12);
+select t.ok('0-20 食品成分表を直す admin の判定関数は無い', to_regprocedure('private.is_any_admin()') is null);
+
 -- ── 架空の施設B・利用者・Bのデータ（SQL エディタ＝postgres で登録する想定。facility_id は明示） ──
 insert into facilities (id, name) values (t.fb(), '試験用 施設B');
 insert into auth.users (id) values (t.ub()), (t.unone()), (t.uboth()), (t.uadm());
+-- uboth（2施設の会員）は 1人1施設の制約で登録できないので、ここでは登録しない（3c で制約を外して試す）
 insert into facility_members (user_id, facility_id, role) values
   (t.ub(),    t.fb(), 'member'),
-  (t.uboth(), t.fd(), 'member'),
-  (t.uboth(), t.fb(), 'member'),
   (t.uadm(),  t.fb(), 'admin');
 
 -- Bのデータは既定の施設と同じ名前・番号・日付・キーにする（＝一意が施設ごとであることも確かめる）
@@ -156,6 +209,8 @@ select set_config('t.b_dish', (select id::text from dishes where name = 'Bの焼
 select set_config('t.b_ing',  (select id::text from ingredients where facility_id = t.fb() and name = '見本の米'), false);
 select set_config('t.a_dish', (select id::text from dishes where name = '見本の焼き魚'), false);
 select set_config('t.a_ing',  (select id::text from ingredients where facility_id = t.fd() and name = '見本の米'), false);
+select set_config('t.b_set',  (select id::text from menu_sets where facility_id = t.fb() and code = '見本1'), false);
+select set_config('t.a_set',  (select id::text from menu_sets where facility_id = t.fd() and code = '見本1'), false);
 
 -- ═════ 1. 未ログイン（anon）は全表を読めない・書けない ═════
 begin;
@@ -180,8 +235,10 @@ select t.fails('1-12 anon: 設定に書けない',       $$insert into app_setti
 select t.fails('1-13 anon: 施設を作れない',       $$insert into facilities (name) values ('anon')$$);
 select t.affects('1-14 anon: '|| x.tb ||' を直せない（0件）', format('update %I set facility_id = facility_id', x.tb), 0)
   from unnest(array['ingredients','menu_sets','dishes','dish_ingredients','daily_menus','report_staff','app_settings']) x(tb);
+select t.fails('1-17 anon: 食品成分表を直せない（権限なし）', $$update food_composition set energy_kcal = 0$$);
+select t.fails('1-18 anon: 食品成分表を消せない（権限なし）', $$delete from food_composition$$);
 select t.affects('1-15 anon: '|| x.tb ||' を消せない（0件）', format('delete from %I', x.tb), 0)
-  from unnest(array['food_composition','ingredients','menu_sets','dishes','dish_ingredients','daily_menus','report_staff','app_settings']) x(tb);
+  from unnest(array['ingredients','menu_sets','dishes','dish_ingredients','daily_menus','report_staff','app_settings']) x(tb);
 select t.fails('1-16 anon: replace_dish_recipe は料理を見つけられず止まる',
   format($$select replace_dish_recipe(%s, '[]'::jsonb)$$, current_setting('t.a_dish')));
 rollback;
@@ -280,7 +337,11 @@ select t.eq('3-10 会員でない人: 何も読めない', (select count(*) from
 select t.ok('3-11 会員でない人もログインしていれば食品成分表は読める', (select count(*) from food_composition) > 0);
 rollback;
 
+-- 3c. 2施設の会員（1人1施設の一意を、この取引の中だけ外して作る）
+--     DB の一意が外れても、黙ってどちらかの施設へ書かない（既定値の二重の守り）ことを見る
 begin;
+drop index public.facility_members_user_uidx;
+insert into facility_members (user_id, facility_id) values (t.uboth(), t.fd()), (t.uboth(), t.fb());
 set local role authenticated;
 select t.login(t.uboth());
 select t.ok('3-12 2施設の会員: 既定値は null', private.current_facility_id() is null);
@@ -288,25 +349,49 @@ select t.fails('3-13 2施設の会員: facility_id を書かずに入れると�
 select t.affects('3-14 2施設の会員: facility_id を書けば入れられる',
   $$insert into daily_menus (facility_id, menu_date) values (t.fb(), '2099-05-01')$$, 1);
 select t.eq('3-15 2施設の会員: 両方の施設の行が読める', (select count(*) from daily_menus where menu_date = '2099-01-01'), 2);
+select replace_dish_recipe(current_setting('t.b_dish')::bigint,
+  format('[{"ingredient_id": %s, "amount_g": 70}]', current_setting('t.b_ing'))::jsonb);
+select t.eq('5-19 2施設の会員: replace_dish_recipe は料理の施設で明細を書く（既定値の null に当たらない）',
+  (select count(*) from dish_ingredients where dish_id = current_setting('t.b_dish')::bigint and facility_id = t.fb() and amount_g = 70), 1);
+select t.eq('6-7 2施設の会員: 会員の表は自分の2行', (select count(*) from facility_members), 2);
+select t.eq('6-8 2施設の会員: 施設の表は2施設', (select count(*) from facilities), 2);
 rollback;
+select t.ok('3-16 3c の後: 1人1施設の一意の索引は戻っている',
+  to_regclass('public.facility_members_user_uidx') is not null);
 
--- ═════ 4. 食品成分表: ログインで読める・admin の会員だけ書ける ═════
+-- ═════ 4. 食品成分表: 全施設で共有・読むだけ（ログインで読める・admin でも書けない・更新は service role） ═════
 begin;
 set local role authenticated;
 select t.login(t.ua());
 select t.eq('4-1 member: 食品成分表を読める', (select count(*) from food_composition), 2);
 select t.fails('4-2 member: 食品成分表に入れられない', $$insert into food_composition (food_code, food_name) values ('X2', 'x')$$);
-select t.affects('4-3 member: 食品成分表を直せない（0件）', $$update food_composition set energy_kcal = 0$$, 0);
-select t.affects('4-4 member: 食品成分表を消せない（0件）', $$delete from food_composition where food_code = 'T0002'$$, 0);
+select t.fails('4-3 member: 食品成分表を直せない', $$update food_composition set energy_kcal = 0$$);
+select t.fails('4-4 member: 食品成分表を消せない', $$delete from food_composition where food_code = 'T0002'$$);
 rollback;
 
 begin;
 set local role authenticated;
 select t.login(t.uadm());
-select t.affects('4-5 admin: 食品成分表に入れられる', $$insert into food_composition (food_code, food_name) values ('X3', 'x')$$, 1);
-select t.affects('4-6 admin: 食品成分表を直せる', $$update food_composition set energy_kcal = 1 where food_code = 'X3'$$, 1);
-select t.affects('4-7 admin: 食品成分表を消せる', $$delete from food_composition where food_code = 'X3'$$, 1);
+select t.eq('4-5a admin: 食品成分表を読める', (select count(*) from food_composition), 2);
+select t.fails('4-5 admin でも食品成分表に入れられない', $$insert into food_composition (food_code, food_name) values ('X3', 'x')$$);
+select t.fails('4-6 admin でも食品成分表を直せない', $$update food_composition set energy_kcal = 1 where food_code = 'T0001'$$);
+select t.fails('4-7 admin でも食品成分表を消せない', $$delete from food_composition where food_code = 'T0002'$$);
 select t.eq('4-8 admin でも他施設（既定の施設）の献立は見えない', (select count(*) from daily_menus where facility_id = t.fd()), 0);
+rollback;
+select t.eq('4-9 食品成分表は変わっていない（2行・T0001 は 156kcal）',
+  (select count(*) from food_composition where food_code in ('T0001','T0002')) +
+  (select count(*) from food_composition where food_code = 'T0001' and energy_kcal = 156), 3);
+select t.eq('4-10 anon・authenticated に食品成分表の insert/update/delete/truncate の権限が無い', (
+  select count(*) from unnest(array['anon','authenticated']) r(role), unnest(array['INSERT','UPDATE','DELETE','TRUNCATE']) p(priv)
+   where has_table_privilege(r.role, 'public.food_composition', p.priv)), 0);
+select t.eq('4-11 食品成分表のポリシーは read_auth（select・authenticated）だけ', (
+  select count(*) from pg_policies where schemaname = 'public' and tablename = 'food_composition'
+     and not (policyname = 'read_auth' and cmd = 'SELECT' and roles = '{authenticated}')), 0);
+begin;
+set local role service_role;
+select t.affects('4-12 service role: 食品成分表に入れられる', $$insert into food_composition (food_code, food_name) values ('X4', 'x')$$, 1);
+select t.affects('4-13 service role: 食品成分表を直せる', $$update food_composition set energy_kcal = 1 where food_code = 'X4'$$, 1);
+select t.affects('4-14 service role: 食品成分表を消せる', $$delete from food_composition where food_code = 'X4'$$, 1);
 rollback;
 
 -- ═════ 5. ビューと replace_dish_recipe は施設で絞られる ═════
@@ -347,14 +432,6 @@ select t.ok('5-18 施設Bの料理のレシピは変わっていない（1行・
   (select count(*) from dish_ingredients where dish_id = current_setting('t.b_dish')::bigint) = 1 and
   (select amount_g from dish_ingredients where dish_id = current_setting('t.b_dish')::bigint) = 150);
 
-begin;
-set local role authenticated;
-select t.login(t.uboth());
-select replace_dish_recipe(current_setting('t.b_dish')::bigint,
-  format('[{"ingredient_id": %s, "amount_g": 70}]', current_setting('t.b_ing'))::jsonb);
-select t.eq('5-19 2施設の会員: replace_dish_recipe は料理の施設で明細を書く（既定値の null に当たらない）',
-  (select count(*) from dish_ingredients where dish_id = current_setting('t.b_dish')::bigint and facility_id = t.fb() and amount_g = 70), 1);
-rollback;
 
 -- ═════ 6. 施設・会員の表 ═════
 begin;
@@ -368,9 +445,108 @@ select t.fails('6-5 uA: 会員の行を消せない', $$delete from facility_mem
 select t.fails('6-6 uA: 施設を作れない', $$insert into facilities (name) values ('勝手な施設')$$);
 rollback;
 
+-- 1人1施設（SQL エディタ＝postgres で登録しても断られる）
+select t.fails_with('6-9 1人1施設: 既定の施設の会員を施設Bの会員にも登録できない',
+  $$insert into facility_members (user_id, facility_id) values (t.ua(), t.fb())$$, '23505');
+begin;
+delete from facility_members where user_id = t.ua();
+insert into facility_members (user_id, facility_id) values (t.ua(), t.fb());
+select t.eq('6-10 1人1施設: 施設を移す時は消してから入れ直せる',
+  (select count(*) from facility_members where user_id = t.ua() and facility_id = t.fb()), 1);
+rollback;
+
+-- ═════ 7. 表どうしの参照は同じ施設の中だけ（2列の外部キー） ═════
+-- 自分の施設の行（facility_id = 既定の施設）から、施設Bの id を指す insert／update。
+-- RLS（with check）は通る形なので、断るのは外部キー（23503）であることを状態コードで確かめる。
+-- uA（ログイン・RLS あり）と postgres（SQL エディタ・service role と同じく RLS を通らない）の両方で試す。
+create table t.xref (n int, label text, stmt text);
+insert into t.xref values
+  (1,  '料理→献立セット（insert）',
+       format($$insert into dishes (facility_id, name, dish_type, owner_menu_set_id) values (%L, 'A→Bのセット', 'main', %s)$$, t.fd(), current_setting('t.b_set'))),
+  (2,  '料理→献立セット（update）',
+       format($$update dishes set owner_menu_set_id = %s where id = %s$$, current_setting('t.b_set'), current_setting('t.a_dish'))),
+  (3,  '献立セット→主食（update）', format($$update menu_sets set staple_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set'))),
+  (4,  '献立セット→主菜（update）', format($$update menu_sets set main_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set'))),
+  (5,  '献立セット→副1（update）',  format($$update menu_sets set side1_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set'))),
+  (6,  '献立セット→副2（update）',  format($$update menu_sets set side2_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set'))),
+  (7,  '献立セット→汁（update）',   format($$update menu_sets set soup_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set'))),
+  (8,  '献立セット→主菜（insert）',
+       format($$insert into menu_sets (facility_id, code, category, main_dish_id) values (%L, 'A→B', '魚', %s)$$, t.fd(), current_setting('t.b_dish'))),
+  (9,  '料理の材料→食材（insert）',
+       format($$insert into dish_ingredients (facility_id, dish_id, ingredient_id) values (%L, %s, %s)$$, t.fd(), current_setting('t.a_dish'), current_setting('t.b_ing'))),
+  (10, '料理の材料→食材（update）',
+       format($$update dish_ingredients set ingredient_id = %s where dish_id = %s$$, current_setting('t.b_ing'), current_setting('t.a_dish'))),
+  (11, '料理の材料→料理（insert）',
+       format($$insert into dish_ingredients (facility_id, dish_id, ingredient_id) values (%L, %s, %s)$$, t.fd(), current_setting('t.b_dish'), current_setting('t.a_ing'))),
+  (12, '料理の材料→料理（update）',
+       format($$update dish_ingredients set dish_id = %s where dish_id = %s$$, current_setting('t.b_dish'), current_setting('t.a_dish'))),
+  (13, '日ごとの献立→朝（insert）',
+       format($$insert into daily_menus (facility_id, menu_date, breakfast_set_id) values (%L, '2099-07-01', %s)$$, t.fd(), current_setting('t.b_set'))),
+  (14, '日ごとの献立→昼（insert）',
+       format($$insert into daily_menus (facility_id, menu_date, lunch_set_id) values (%L, '2099-07-02', %s)$$, t.fd(), current_setting('t.b_set'))),
+  (15, '日ごとの献立→夕（insert）',
+       format($$insert into daily_menus (facility_id, menu_date, dinner_set_id) values (%L, '2099-07-03', %s)$$, t.fd(), current_setting('t.b_set'))),
+  (16, '日ごとの献立→おやつ（insert）',
+       format($$insert into daily_menus (facility_id, menu_date, snack_dish_id) values (%L, '2099-07-04', %s)$$, t.fd(), current_setting('t.b_dish'))),
+  (17, '日ごとの献立→朝（update）',
+       format($$update daily_menus set breakfast_set_id = %s where facility_id = %L and menu_date = '2099-01-01'$$, current_setting('t.b_set'), t.fd())),
+  (18, '日ごとの献立→昼（update）',
+       format($$update daily_menus set lunch_set_id = %s where facility_id = %L and menu_date = '2099-01-01'$$, current_setting('t.b_set'), t.fd())),
+  (19, '日ごとの献立→夕（update）',
+       format($$update daily_menus set dinner_set_id = %s where facility_id = %L and menu_date = '2099-01-01'$$, current_setting('t.b_set'), t.fd())),
+  (20, '日ごとの献立→おやつ（update）',
+       format($$update daily_menus set snack_dish_id = %s where facility_id = %L and menu_date = '2099-01-01'$$, current_setting('t.b_dish'), t.fd()));
+grant select on t.xref to authenticated;
+
 begin;
 set local role authenticated;
-select t.login(t.uboth());
-select t.eq('6-7 2施設の会員: 会員の表は自分の2行', (select count(*) from facility_members), 2);
-select t.eq('6-8 2施設の会員: 施設の表は2施設', (select count(*) from facilities), 2);
+select t.login(t.ua());
+select t.fails_with('7-'|| x.n ||' uA: '|| x.label ||' で施設Bの id を指せない', x.stmt, '23503') from t.xref x order by x.n;
+-- 他施設の id があるかどうかは、エラーの違いで分からない（無い id と同じ形で断られる）
+select t.ok('7-21 uA: 施設Bの献立セット id と、どこにも無い id で、断られ方が同じ',
+  t.errsig(format($$insert into dishes (name, dish_type, owner_menu_set_id) values ('x', 'main', %s)$$, current_setting('t.b_set')))
+  = t.errsig($$insert into dishes (name, dish_type, owner_menu_set_id) values ('x', 'main', 987654321)$$)
+  and t.errsig($$insert into dishes (name, dish_type, owner_menu_set_id) values ('x', 'main', 987654321)$$) like '23503 |%');
+select t.ok('7-22 uA: 施設Bの料理 id と、どこにも無い id で、献立セットの更新の断られ方が同じ',
+  t.errsig(format($$update menu_sets set main_dish_id = %s where id = %s$$, current_setting('t.b_dish'), current_setting('t.a_set')))
+  = t.errsig(format($$update menu_sets set main_dish_id = 987654321 where id = %s$$, current_setting('t.a_set'))));
 rollback;
+
+begin;
+select t.fails_with('7-'|| (x.n + 100) ||' postgres（RLS なし）: '|| x.label ||' で施設Bの id を指せない', x.stmt, '23503')
+  from t.xref x order by x.n;
+rollback;
+
+-- 同じ施設の中なら指せる（2列の外部キーが自分の施設の参照まで止めていないこと）
+begin;
+set local role authenticated;
+select t.login(t.ua());
+select t.affects('7-30 uA: 自分の献立セットの主菜を自分の料理に付け替えられる',
+  format($$update menu_sets set main_dish_id = %s where id = %s$$, current_setting('t.a_dish'), current_setting('t.a_set')), 1);
+select t.affects('7-31 uA: 自分の施設の献立セットで日ごとの献立を入れられる',
+  format($$insert into daily_menus (menu_date, lunch_set_id) values ('2099-07-10', %s)$$, current_setting('t.a_set')), 1);
+select t.affects('7-32 uA: 自分の料理・食材で明細を入れられる',
+  format($$insert into dish_ingredients (dish_id, ingredient_id, amount_g) values (%s, %s, 1)$$, current_setting('t.a_dish'), current_setting('t.a_ing')), 1);
+rollback;
+
+-- 親の facility_id を、子が指しているまま他施設へ移せない（on update は no action）
+select t.fails_with('7-33 postgres: 子に指されている施設Bの献立セットを既定の施設へ移せない',
+  format($$update menu_sets set facility_id = %L, code = 'B移' where id = %s$$, t.fd(), current_setting('t.b_set')), '23503');
+
+-- on delete の意味は 0001 と同じ（set null はその列だけ空にし、facility_id は残す）
+begin;
+delete from dishes where id = current_setting('t.b_dish')::bigint;
+select t.ok('7-34 料理を消すと献立セットの主菜だけ空になり、セットは施設Bに残る（set null (列)）',
+  (select main_dish_id is null and facility_id = t.fb() from menu_sets where id = current_setting('t.b_set')::bigint));
+select t.eq('7-35 料理を消すと明細も消える（cascade）',
+  (select count(*) from dish_ingredients where dish_id = current_setting('t.b_dish')::bigint), 0);
+rollback;
+begin;
+delete from menu_sets where id = current_setting('t.b_set')::bigint;
+select t.ok('7-36 献立セットを消すと日ごとの献立の昼だけ空になり、献立は施設Bに残る（set null (列)）',
+  (select lunch_set_id is null and facility_id = t.fb() from daily_menus where facility_id = t.fb() and menu_date = '2099-01-01'));
+select t.eq('7-37 献立セットを消すとセットの料理も消える（cascade）',
+  (select count(*) from dishes where id = current_setting('t.b_dish')::bigint), 0);
+rollback;
+select t.fails_with('7-38 明細に使われている食材は消せない（no action）',
+  format('delete from ingredients where id = %s', current_setting('t.b_ing')), '23503');

@@ -43,8 +43,8 @@ npm install
 ```bash
 # 元Excelを解析して data/*.json を生成（要: 共有ボリュームへのアクセス）
 EXCEL_PATH="/Volumes/.../献立・作業指示書（改良版） .xlsx" npm run parse
-# Supabase へ投入
-npm run seed
+# Supabase へ投入（0010 以降は施設の指定が必須。施設の id は DEPLOY.md「施設・会員の登録の仕方」）
+npm run seed -- --facility=<施設の id>
 ```
 
 ### 5. 開発サーバ
@@ -59,4 +59,4 @@ npm run dev
 | `npm run dev` | 開発サーバ起動 |
 | `npm run build` | 本番ビルド |
 | `npm run parse` | Excel → 中間JSON（data/） |
-| `npm run seed` | 中間JSON → Supabase 投入 |
+| `npm run seed -- --facility=<施設の id>` | 中間JSON → Supabase 投入（指定した施設の献立セット・料理・明細を作り直す） |

@@ -37,11 +37,11 @@ export async function fetchMenuSets(category: string): Promise<MenuSetListItem[]
     .from('menu_sets')
     .select(
       `id, code, category, seq_no,
-       staple:staple_dish_id(name),
-       main:main_dish_id(name),
-       side1:side1_dish_id(name),
-       side2:side2_dish_id(name),
-       soup:soup_dish_id(name)`
+       staple:dishes!menu_sets_staple_dish_fkey(name),
+       main:dishes!menu_sets_main_dish_fkey(name),
+       side1:dishes!menu_sets_side1_dish_fkey(name),
+       side2:dishes!menu_sets_side2_dish_fkey(name),
+       soup:dishes!menu_sets_soup_dish_fkey(name)`
     )
     .eq('category', category)
     .order('seq_no', { ascending: true, nullsFirst: false })
@@ -115,11 +115,11 @@ export async function fetchMenuSetDetail(id: number): Promise<MenuSetDetail | nu
     .from('menu_sets')
     .select(
       `id, code, category, seq_no,
-       staple:staple_dish_id(id, name, ${recipe}),
-       main:main_dish_id(id, name, ${recipe}),
-       side1:side1_dish_id(id, name, ${recipe}),
-       side2:side2_dish_id(id, name, ${recipe}),
-       soup:soup_dish_id(id, name, ${recipe})`
+       staple:dishes!menu_sets_staple_dish_fkey(id, name, ${recipe}),
+       main:dishes!menu_sets_main_dish_fkey(id, name, ${recipe}),
+       side1:dishes!menu_sets_side1_dish_fkey(id, name, ${recipe}),
+       side2:dishes!menu_sets_side2_dish_fkey(id, name, ${recipe}),
+       soup:dishes!menu_sets_soup_dish_fkey(id, name, ${recipe})`
     )
     .eq('id', id)
     .maybeSingle()

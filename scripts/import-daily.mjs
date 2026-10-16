@@ -1,18 +1,22 @@
 // 日次作業指示書xlsx群 → daily_menus へ反映。
-// 既定はドライラン（書き込みなし・プレビューのみ）。--apply で実投入(upsert onConflict=menu_date)。
-// 実行: node scripts/import-daily.mjs        (プレビュー)
-//       node scripts/import-daily.mjs --apply (投入)
+// 既定はドライラン（書き込みなし・プレビューのみ）。--apply で実投入(upsert onConflict=facility_id,menu_date)。
+// 施設の指定が必須（0010 以降）。読むのも書くのも指定した施設の行だけ（scripts/_facility.mjs）。
+// 実行: node scripts/import-daily.mjs --facility=<施設の id>         (プレビュー)
+//       node scripts/import-daily.mjs --facility=<施設の id> --apply (投入)
 import xlsx from 'xlsx'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { readdirSync } from 'node:fs'
+import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '..', '.env') })
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
 const APPLY = process.argv.includes('--apply')
+const FACILITY_ID = facilityIdFromArgs()
+await assertFacilityExists(sb, FACILITY_ID)
 const YEAR = 2026 // 令和8年
 const BASE = '/Users/Takeshi/Documents/【厨房】/【10. 厨房】/作業指示書R8年度'
 const DIRS = ['作業指示書R8.6', '作業指示書R8.7']
@@ -64,6 +68,7 @@ for (const d of DIRS) {
 records.sort((a, b) => a.date.localeCompare(b.date))
 
 // --- 番号解決（menu_sets / snack dishes） ---
+// service role は RLS を通らないので、指定した施設の行だけに絞る（他施設の同じ番号・日付を拾わない）
 // Supabaseは既定1000行上限のため全件ページング必須。取得エラーは fail-fast
 // （エラーを空扱いすると --apply が既存日の set_id を全 null 上書きする事故になる）
 async function fetchAllRows(label, build) {
@@ -77,11 +82,11 @@ async function fetchAllRows(label, build) {
   }
   return out
 }
-const sets = await fetchAllRows('menu_sets', () => sb.from('menu_sets').select('id, code').order('id'))
+const sets = await fetchAllRows('menu_sets', () => sb.from('menu_sets').select('id, code').eq('facility_id', FACILITY_ID).order('id'))
 const setByCode = new Map(sets.map((s) => [s.code, s.id]))
-const snacks = await fetchAllRows('dishes(snack)', () => sb.from('dishes').select('id, code, name').eq('dish_type', 'snack').not('code', 'is', null).order('id'))
+const snacks = await fetchAllRows('dishes(snack)', () => sb.from('dishes').select('id, code, name').eq('facility_id', FACILITY_ID).eq('dish_type', 'snack').not('code', 'is', null).order('id'))
 const snackByCode = new Map(snacks.map((s) => [s.code, { id: s.id, name: s.name }]))
-const existing = await fetchAllRows('daily_menus', () => sb.from('daily_menus').select('menu_date').order('menu_date'))
+const existing = await fetchAllRows('daily_menus', () => sb.from('daily_menus').select('menu_date').eq('facility_id', FACILITY_ID).order('menu_date'))
 const existingDates = new Set(existing.map((r) => r.menu_date))
 
 const unresolved = { set: new Set(), snack: new Set() }
@@ -109,10 +114,11 @@ if (!APPLY) {
   process.exit(0)
 }
 
-// --- 投入（upsert onConflict=menu_date） ---
+// --- 投入（upsert onConflict=facility_id,menu_date＝0010 の施設ごとの一意） ---
 let okc = 0, skip = 0
 for (const r of records) {
   const payload = {
+    facility_id: FACILITY_ID,
     menu_date: r.date,
     meal_count: 30, // Excelに人数欄の数値が無いため施設標準=30で作成（後でアプリ調整可）
     breakfast_set_id: r.breakfast ? setByCode.get(r.breakfast) ?? null : null,
@@ -122,7 +128,7 @@ for (const r of records) {
   }
   // 既存日はアプリで調整済みの食数を温存（upsertは提供列を全てSETするため）。既定30は新規日のみ
   if (existingDates.has(r.date)) delete payload.meal_count
-  const { error } = await sb.from('daily_menus').upsert(payload, { onConflict: 'menu_date' })
+  const { error } = await sb.from('daily_menus').upsert(payload, { onConflict: 'facility_id,menu_date' })
   if (error) { console.log('  ✗', r.date, error.message); skip++ } else okc++
 }
 console.log(`\n✅ 投入完了: ${okc}件 / 失敗: ${skip}件`)

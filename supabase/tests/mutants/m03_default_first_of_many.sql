@@ -1,4 +1,4 @@
--- 壊した版: 2施設の会員でも1つ目の施設を既定値にする（黙ってどちらかへ書く）→ 3-12・3-13 が落ちるはず
+-- 壊した版: 2施設の会員でも1つ目の施設を既定値にする（黙ってどちらかへ書く）→ 3-12・3-13 が落ちるはず（3c は1人1施設の一意をその中だけ外して2施設の会員を作る）
 create or replace function private.current_facility_id() returns uuid
 language sql stable security definer set search_path = ''
 as $$

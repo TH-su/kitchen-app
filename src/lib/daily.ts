@@ -9,20 +9,20 @@ const one = (v: unknown): any => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 const RECIPE_SEL =
   'dish_ingredients(amount_g, sort_order, ingredients(name, food_code, food_composition(energy_kcal)))'
 const SET_SEL = `code, category,
-  staple:staple_dish_id(name, notes, ${RECIPE_SEL}),
-  main:main_dish_id(name, notes, ${RECIPE_SEL}),
-  side1:side1_dish_id(name, notes, ${RECIPE_SEL}),
-  side2:side2_dish_id(name, notes, ${RECIPE_SEL}),
-  soup:soup_dish_id(name, notes, ${RECIPE_SEL})`
+  staple:dishes!menu_sets_staple_dish_fkey(name, notes, ${RECIPE_SEL}),
+  main:dishes!menu_sets_main_dish_fkey(name, notes, ${RECIPE_SEL}),
+  side1:dishes!menu_sets_side1_dish_fkey(name, notes, ${RECIPE_SEL}),
+  side2:dishes!menu_sets_side2_dish_fkey(name, notes, ${RECIPE_SEL}),
+  soup:dishes!menu_sets_soup_dish_fkey(name, notes, ${RECIPE_SEL})`
 
 // 軽量版: 皿名のみ（dish_ingredients を取得しない）。献立掲示/職員週間表は品名しか使わないため、
 // 食材ツリー全体の取得・保持を省いてメモリ/転送を大幅に削減する（items は空配列になる）。
 const SET_SEL_LITE = `code, category,
-  staple:staple_dish_id(name),
-  main:main_dish_id(name),
-  side1:side1_dish_id(name),
-  side2:side2_dish_id(name),
-  soup:soup_dish_id(name)`
+  staple:dishes!menu_sets_staple_dish_fkey(name),
+  main:dishes!menu_sets_main_dish_fkey(name),
+  side1:dishes!menu_sets_side1_dish_fkey(name),
+  side2:dishes!menu_sets_side2_dish_fkey(name),
+  soup:dishes!menu_sets_soup_dish_fkey(name)`
 
 // ---------- 一覧 ----------
 export interface DailyMenuListItem {
@@ -40,8 +40,8 @@ export async function fetchDailyMenus(): Promise<DailyMenuListItem[]> {
     .from('daily_menus')
     .select(
       `id, menu_date, meal_count,
-       breakfast:breakfast_set_id(code), lunch:lunch_set_id(code),
-       dinner:dinner_set_id(code), snack:snack_dish_id(name)`
+       breakfast:menu_sets!daily_menus_breakfast_set_fkey(code), lunch:menu_sets!daily_menus_lunch_set_fkey(code),
+       dinner:menu_sets!daily_menus_dinner_set_fkey(code), snack:dishes!daily_menus_snack_dish_fkey(name)`
     )
     .order('menu_date', { ascending: false })
     .limit(200)
@@ -179,10 +179,10 @@ function dailyCols(withReports = false): string {
   const reports = withReports && reportColsAvailable() ? ' kenshoku, nisshi,' : ''
   return `id, menu_date, meal_count, note,${stapleColAvailable() ? ' staple_grain_g,' : ''}${reports}
     breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
-    breakfast:breakfast_set_id(${SET_SEL}),
-    lunch:lunch_set_id(${SET_SEL}),
-    dinner:dinner_set_id(${SET_SEL}),
-    snack:snack_dish_id(name, code, ${RECIPE_SEL})`
+    breakfast:menu_sets!daily_menus_breakfast_set_fkey(${SET_SEL}),
+    lunch:menu_sets!daily_menus_lunch_set_fkey(${SET_SEL}),
+    dinner:menu_sets!daily_menus_dinner_set_fkey(${SET_SEL}),
+    snack:dishes!daily_menus_snack_dish_fkey(name, code, ${RECIPE_SEL})`
 }
 
 export async function fetchDailyMenuByDate(date: string): Promise<DailyMenuFull | null> {
@@ -254,10 +254,10 @@ export async function fetchDailyMenusRange(start: string, end: string): Promise<
 function dailyColsLite(): string {
   return `id, menu_date, meal_count, note,
     breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
-    breakfast:breakfast_set_id(${SET_SEL_LITE}),
-    lunch:lunch_set_id(${SET_SEL_LITE}),
-    dinner:dinner_set_id(${SET_SEL_LITE}),
-    snack:snack_dish_id(name, code)`
+    breakfast:menu_sets!daily_menus_breakfast_set_fkey(${SET_SEL_LITE}),
+    lunch:menu_sets!daily_menus_lunch_set_fkey(${SET_SEL_LITE}),
+    dinner:menu_sets!daily_menus_dinner_set_fkey(${SET_SEL_LITE}),
+    snack:dishes!daily_menus_snack_dish_fkey(name, code)`
 }
 export async function fetchDailyMenusRangeLite(start: string, end: string): Promise<DailyMenuFull[]> {
   const { data, error } = await supabase
@@ -276,10 +276,10 @@ function dailyColsLiteReports(): string {
   const reports = reportColsAvailable() ? ' kenshoku, nisshi,' : ''
   return `id, menu_date, meal_count, note,${reports}
     breakfast_set_id, lunch_set_id, dinner_set_id, snack_dish_id,
-    breakfast:breakfast_set_id(${SET_SEL_LITE}),
-    lunch:lunch_set_id(${SET_SEL_LITE}),
-    dinner:dinner_set_id(${SET_SEL_LITE}),
-    snack:snack_dish_id(name, code)`
+    breakfast:menu_sets!daily_menus_breakfast_set_fkey(${SET_SEL_LITE}),
+    lunch:menu_sets!daily_menus_lunch_set_fkey(${SET_SEL_LITE}),
+    dinner:menu_sets!daily_menus_dinner_set_fkey(${SET_SEL_LITE}),
+    snack:dishes!daily_menus_snack_dish_fkey(name, code)`
 }
 export async function fetchDailyReportsRange(start: string, end: string): Promise<DailyMenuFull[]> {
   const run = () =>
@@ -579,7 +579,7 @@ export interface PickItem {
 export async function fetchMenuSetPickList(): Promise<PickItem[]> {
   const { data, error } = await supabase
     .from('menu_sets')
-    .select('id, code, category, seq_no, staple:staple_dish_id(name), main:main_dish_id(name)')
+    .select('id, code, category, seq_no, staple:dishes!menu_sets_staple_dish_fkey(name), main:dishes!menu_sets_main_dish_fkey(name)')
     .order('seq_no', { ascending: true, nullsFirst: false })
     .limit(2000)
   if (error) throw error

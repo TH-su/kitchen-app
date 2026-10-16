@@ -1,16 +1,20 @@
 // 新Excel の食材分量だけを現行DBへ安全反映。既定はDRY RUN（--apply で書込）。
 //   parse-excel と同じスロット↔レシピ突合で、menu_set×スロット単位に amount_g のみ更新。
 //   食材名/料理名/menu_set構成/food_code/daily_menus は一切触らない。
-//   実行: EXCEL_PATH="..." node scripts/update-amounts.mjs [--apply]
+//   実行: EXCEL_PATH="..." node scripts/update-amounts.mjs --facility=<施設の id> [--apply]
+//   0010 以降は施設の指定が必須。読むのも書き換えるのも指定した施設の献立セット・明細だけ。
 import xlsx from 'xlsx'
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '..', '.env') })
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 const APPLY = process.argv.includes('--apply')
+const FACILITY_ID = facilityIdFromArgs()
+await assertFacilityExists(sb, FACILITY_ID)
 const one = (v) => (Array.isArray(v) ? v[0] : v)
 const SRC = process.env.EXCEL_PATH
 if (!SRC) { console.error('EXCEL_PATH を指定'); process.exit(1) }
@@ -70,7 +74,9 @@ const DISH_SEL = '(name, dish_ingredients(id, amount_g, sort_order, ingredients(
 let sets = [], from = 0
 for (;;) {
   const { data, error } = await sb.from('menu_sets')
-    .select(`code, staple:staple_dish_id${DISH_SEL}, main:main_dish_id${DISH_SEL}, side1:side1_dish_id${DISH_SEL}, side2:side2_dish_id${DISH_SEL}, soup:soup_dish_id${DISH_SEL}`)
+    .select(`code, staple:dishes!menu_sets_staple_dish_fkey${DISH_SEL}, main:dishes!menu_sets_main_dish_fkey${DISH_SEL}, side1:dishes!menu_sets_side1_dish_fkey${DISH_SEL}, side2:dishes!menu_sets_side2_dish_fkey${DISH_SEL}, soup:dishes!menu_sets_soup_dish_fkey${DISH_SEL}`)
+    .eq('facility_id', FACILITY_ID)
+    .order('id')
     .range(from, from + 499)
   if (error) throw error
   sets = sets.concat(data); if (data.length < 500) break; from += 500
@@ -110,7 +116,7 @@ for (const u of updates) console.log(`  ${u.code}/${u.dish}: ${u.ing} ${u.old}�
 if (APPLY) {
   let ok = 0
   for (const u of updates) {
-    const { error } = await sb.from('dish_ingredients').update({ amount_g: u.new }).eq('id', u.id)
+    const { error } = await sb.from('dish_ingredients').update({ amount_g: u.new }).eq('facility_id', FACILITY_ID).eq('id', u.id)
     if (error) { console.error(`  ✗ ${u.code}/${u.ing}:`, error.message); continue }
     ok++
   }
