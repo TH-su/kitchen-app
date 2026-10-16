@@ -1,0 +1,31 @@
+name: SQL の試験（施設ごとの分割）
+
+# push と PR で supabase/tests の SQL の試験を回す。秘密は使わない（実データ・本番 DB に触れない）
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sql-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 試験
+        env:
+          TEST_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: bash supabase/tests/run.sh

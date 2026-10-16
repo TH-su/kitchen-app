@@ -26,11 +26,12 @@ export interface RecipeRowInput {
 }
 
 // 食材を名前で upsert して id を返す（無ければ作成）
+// 食材名の一意は施設ごと（migration 0010）。facility_id は送らず DB の既定値（会員の施設）で埋まる
 export async function ensureIngredient(name: string): Promise<number> {
   const n = name.trim()
   const { data, error } = await supabase
     .from('ingredients')
-    .upsert({ name: n }, { onConflict: 'name' })
+    .upsert({ name: n }, { onConflict: 'facility_id,name' })
     .select('id')
     .single()
   if (error) throw error
@@ -45,7 +46,7 @@ export async function ensureIngredients(names: string[]): Promise<Map<string, nu
     .from('ingredients')
     .upsert(
       uniq.map((name) => ({ name })),
-      { onConflict: 'name' }
+      { onConflict: 'facility_id,name' }
     )
     .select('id, name')
   if (error) throw error

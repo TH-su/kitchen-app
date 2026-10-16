@@ -620,9 +620,10 @@ export interface DailyMenuInput {
   note: string | null
   staple_grain_g: number // 主食1食あたりg（Phase C）
 }
+// 日付の一意は施設ごと（migration 0010）。facility_id は送らず DB の既定値（会員の施設）で埋まる
 export async function upsertDailyMenu(input: DailyMenuInput): Promise<number> {
   const run = (payload: any) =>
-    supabase.from('daily_menus').upsert(payload, { onConflict: 'menu_date' }).select('id').single()
+    supabase.from('daily_menus').upsert(payload, { onConflict: 'facility_id,menu_date' }).select('id').single()
   const { staple_grain_g, ...rest } = input
   let res = await run(stapleColAvailable() ? input : rest)
   if (isMissingStapleCol(res.error)) { markStapleMissing(); res = await run(rest) }
@@ -639,7 +640,7 @@ export async function saveDailyReport(
 ): Promise<void> {
   const { error } = await supabase
     .from('daily_menus')
-    .upsert({ menu_date, ...patch }, { onConflict: 'menu_date' })
+    .upsert({ menu_date, ...patch }, { onConflict: 'facility_id,menu_date' })
     .select('id')
     .single()
   if (error) throw error
