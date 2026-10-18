@@ -1,16 +1,21 @@
 // 栄養ビューのサニティチェック（v_dish/menuset/daily_nutrition）＋紐付けカバレッジ
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 dotenv.config({ path: join(ROOT, '.env') })
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+// 施設を指定して読む（2026-10-18 改善プロンプト第2弾の15）。service role は RLS を通らないので、絞らないと全施設の行を読む
+const FACILITY_ID = facilityIdFromArgs()
+await assertFacilityExists(sb, FACILITY_ID)
 
 // 1) 献立セット栄養 上位（番号つき）
-const { data: ms } = await sb.from('menu_sets').select('id, code, category').order('seq_no').limit(2000)
-const { data: nut } = await sb.from('v_menuset_nutrition').select('*')
+const { data: ms } = await sb.from('menu_sets').select('id, code, category').eq('facility_id', FACILITY_ID).order('seq_no').limit(2000)
+/* ビューは施設の列を持たないので、この施設の献立セットの id で絞る */
+const { data: nut } = await sb.from('v_menuset_nutrition').select('*').in('menu_set_id', (ms ?? []).map((m) => m.id))
 const byId = new Map((nut ?? []).map((n) => [n.menu_set_id, n]))
 const sample = (ms ?? []).filter((m) => ['朝', '魚', '豚', '鶏', '行事'].includes(m.category)).slice(0, 12)
 console.log('=== 献立セット1食あたり栄養（抜粋）===')
@@ -21,7 +26,7 @@ for (const m of sample) {
 }
 
 // 2) カバレッジ: dish_ingredients のうち food_code 未紐付けの割合（amount_g有・使用中の料理）
-const { data: di } = await sb.from('dish_ingredients').select('amount_g, ingredients(name, food_code)')
+const { data: di } = await sb.from('dish_ingredients').select('amount_g, ingredients(name, food_code)').eq('facility_id', FACILITY_ID)
 let withAmt = 0, linked = 0
 const unlinked = new Map()
 for (const r of di ?? []) {

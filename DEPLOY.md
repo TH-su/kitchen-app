@@ -120,7 +120,7 @@ select conrelid::regclass as tbl, conname, array_length(conkey, 1) as cols
  where contype = 'f' and confrelid in ('menu_sets'::regclass, 'dishes'::regclass, 'ingredients'::regclass)
  order by 1, 2;
 
--- (4) 一意が施設ごとになっている（4つの索引と app_settings_pkey が出る）
+-- (4) 一意が施設ごとになっている（6行出る: 施設ごとの一意の索引4つ・facility_members_user_uidx（1人1施設）・app_settings_pkey）
 select indexname, indexdef from pg_indexes
  where schemaname = 'public'
    and (indexname like '%facility_%uidx' or indexname = 'app_settings_pkey');
@@ -174,9 +174,9 @@ select indexname, indexdef from pg_indexes
   ```bash
   node scripts/import-daily.mjs --facility=00000000-0000-4000-8000-000000000001
   ```
-- **施設の指定を持たないスクリプト**（service role で RLS を通らないため、全施設の行が混ざって見えます）:
-  - `inspect-set.mjs`・`diag-coverage.mjs`・`dump-ingredients.mjs`・`verify-nutrition.mjs` は読むだけで書き換えは
-    しませんが、施設が2つ以上になると他施設の行も混ざって表示されます。
+- **読むだけのスクリプトも施設の指定が要る**（2026-10-18〜。service role は RLS を通らないので、指定した施設の行だけを読む）:
+  - `inspect-set.mjs`・`diag-coverage.mjs`・`dump-ingredients.mjs`・`verify-nutrition.mjs` も `--facility=<施設の id>` が無いと止まる。
+- **施設の指定を持たないスクリプト**:
   - `verify-frontend.mjs`・`verify-resolve.mjs` は未ログイン（anon）で読むため、0008 以降はもともと 0 件です。
   - `test-user.mjs` が作る試験用の利用者は、上の「新しい利用者を…会員にする」で会員に登録するまで何も読めません。
 

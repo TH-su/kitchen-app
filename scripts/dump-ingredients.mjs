@@ -1,10 +1,11 @@
 // =====================================================================
 // DB の ingredients を使用頻度つきでダンプ（成分表マッチングの対象把握用）
 //   出力: data/ingredients_live.json
-//   実行: node scripts/dump-ingredients.mjs
+//   実行: node scripts/dump-ingredients.mjs --facility=<施設の id>
 // =====================================================================
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
+import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -20,17 +21,21 @@ if (!url || !key) {
   process.exit(1)
 }
 const sb = createClient(url, key, { auth: { persistSession: false } })
+// 施設を指定して読む（2026-10-18 改善プロンプト第2弾の15）。service role は RLS を通らないので、絞らないと全施設の行を読む
+const FACILITY_ID = facilityIdFromArgs()
+await assertFacilityExists(sb, FACILITY_ID)
 
 const { data: ings, error: e1 } = await sb
   .from('ingredients')
   .select('id, name, food_code')
+  .eq('facility_id', FACILITY_ID)
   .order('id')
 if (e1) throw e1
 
 // 使用頻度（dish_ingredients での出現数・amount_g の有無）※全件ページング
 let di = [], from = 0
 for (;;) {
-  const { data, error: e2 } = await sb.from('dish_ingredients').select('ingredient_id, amount_g').range(from, from + 999)
+  const { data, error: e2 } = await sb.from('dish_ingredients').select('ingredient_id, amount_g').eq('facility_id', FACILITY_ID).range(from, from + 999)
   if (e2) throw e2
   di = di.concat(data)
   if (data.length < 1000) break
