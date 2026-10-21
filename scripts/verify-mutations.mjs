@@ -3,6 +3,7 @@
 //   テストユーザーをその施設の会員に登録してから試し、終わったら（この実行で登録した時だけ）外す。
 //   作る・消すのはその施設の行だけ。テストユーザーが既に別の施設の会員なら止める（1人1施設）。
 import dotenv from 'dotenv'
+import { randomBytes } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -18,7 +19,8 @@ if (!URL || !SERVICE || !ANON) {
   process.exit(1)
 }
 const EMAIL = 'uitest@example.com'
-const PASSWORD = 'Kitchen-Verify-123'
+// パスワードは実行ごとの乱数（2026-10-21）。固定の値が公開リポジトリにあると、本番に残ったテストユーザーに誰でも入れるため。
+const PASSWORD = randomBytes(18).toString('base64url')
 const admin = createClient(URL, SERVICE, { auth: { persistSession: false } })
 const anon = createClient(URL, ANON, { auth: { persistSession: false } })
 const one = (v) => (Array.isArray(v) ? v[0] ?? null : v ?? null)
@@ -36,7 +38,16 @@ await assertFacilityExists(admin, FACILITY_ID)
 {
   const { data, error } = await admin.auth.admin.createUser({ email: EMAIL, password: PASSWORD, email_confirm: true })
   if (error && !/already|exists|registered/i.test(error.message)) throw error
-  console.log('テストユーザー:', EMAIL, data?.user ? '作成' : '既存')
+  if (!data?.user) {
+    // 既存なら、この実行の乱数のパスワードに替える（前の実行・前の固定のパスワードを使えなくする）
+    const { data: list, error: le } = await admin.auth.admin.listUsers()
+    if (le) throw le
+    const ex = list.users.find((u) => u.email === EMAIL)
+    if (!ex) throw new Error('テストユーザーが見つかりません')
+    const { error: ue } = await admin.auth.admin.updateUserById(ex.id, { password: PASSWORD })
+    if (ue) throw ue
+  }
+  console.log('テストユーザー:', EMAIL, data?.user ? '作成' : '既存（パスワードを新しくした）')
 }
 
 // 3) ログイン
