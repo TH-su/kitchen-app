@@ -60,3 +60,8 @@ npm run dev
 | `npm run build` | 本番ビルド |
 | `npm run parse` | Excel → 中間JSON（data/） |
 | `npm run seed -- --facility=<施設の id>` | 中間JSON → Supabase 投入（指定した施設の献立セット・料理・明細を作り直す） |
+
+## 変更の出し方（2026-10-22〜）
+
+main はルールセットで守られている: 変更は PR だけ・「型とビルド」と「sql-tests」の合格が必須・削除と強制の上書きは禁止。
+main への取り込みがそのまま公開になるため、ブランチを切って push し、PR を作って自動の取り込み（`gh pr merge --auto --merge`）を入れる。試験に合格した時点で取り込まれ、公開が走る。
