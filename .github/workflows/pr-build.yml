@@ -1,0 +1,30 @@
+name: 型とビルド（PR）
+
+# PR の時に、公開（deploy.yml）と同じビルド（tsc -b と vite build）を回す（2026-10-22・改善プロンプト第3弾の9）。
+# main はルールセットで「PR と、この確かめと SQL の試験の合格」が必須になる。公開は今までどおり main への取り込みで deploy.yml が行う。
+# 秘密は使わない（接続先なしで型とまとめ方だけ確かめる。本番の Supabase には一切つながない）。
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 型とビルド
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Build
+        run: npm run build
