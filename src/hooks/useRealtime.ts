@@ -37,22 +37,30 @@ export function useRealtime(tables: string[], onChange: () => void) {
     }
     let ch: ReturnType<typeof supabase.channel> | null = null
     let closed = false
-    ;(async () => {
+    let retry: ReturnType<typeof setTimeout> | null = null
+    // 施設が読めなかった時（起動直後の一時的な失敗など）は、5秒後に1回だけ読み直す（2026-10-23・修正点 H5）。
+    // 読み直しても分からなければ購読せず、ウィンドウに戻った時の再取得だけにする（何度も読みに行かない）
+    const start = async (canRetry: boolean) => {
       const { data } = await supabase.auth.getSession()
       const userId = data.session?.user.id
-      if (!userId) return
-      const fid = await myFacilityId(userId)
-      if (closed || !fid) return
+      const fid = userId ? await myFacilityId(userId) : null
+      if (closed) return
+      if (!fid) {
+        if (canRetry) retry = setTimeout(() => { retry = null; void start(false) }, 5000)
+        return
+      }
       ch = supabase.channel('rt-' + tables.join('-'))
       for (const t of tables) {
         ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: `facility_id=eq.${fid}` }, fire)
       }
       ch.subscribe()
-    })()
+    }
+    void start(true)
     window.addEventListener('focus', fire)
     return () => {
       closed = true
       if (timer) clearTimeout(timer)
+      if (retry) clearTimeout(retry)
       if (ch) supabase.removeChannel(ch)
       window.removeEventListener('focus', fire)
     }
