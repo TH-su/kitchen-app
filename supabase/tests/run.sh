@@ -60,6 +60,9 @@ prep migrations/0010_facility_scope.sql
 # 1回目と2回目の間に、既存の利用者3を会員から外す（再実行で戻らないことを試験 0-13 で見る）
 "${PSQL[@]}" -c "delete from facility_members where user_id = '00000000-0000-4000-8000-0000000000a3'" >/dev/null
 prep migrations/0010_facility_scope.sql
+# 0011（削除の通知の絞り込み）も2回当てる（冪等）
+prep migrations/0011_realtime_delete_scope.sql
+prep migrations/0011_realtime_delete_scope.sql
 if [ -n "${MUTANT:-}" ]; then
   echo "壊した版を当てる: $MUTANT"
   prep "$MUTANT"
@@ -67,6 +70,7 @@ fi
 
 {
   "${PSQL[@]}" -f tests/10_facility_scope_test.sql 2>&1 || true
+  "${PSQL[@]}" -f tests/20_realtime_scope_test.sql 2>&1 || true
   # 施設Bの行がある間に戻しを流すと止まること（止まらなければ不合格）
   if rb_out="$("${PSQL[@]}" -f rollback/0010_back.sql 2>&1)"; then
     echo "FAIL 9-1 他施設の行があるのに戻しが止まらなかった"
