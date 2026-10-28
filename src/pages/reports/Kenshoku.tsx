@@ -90,13 +90,14 @@ function KenshokuMealForm({
   )
 }
 
-export default function Kenshoku({ data, editable, reload, bulk = false }: ReportProps) {
+export default function Kenshoku({ data, editable, reload, bulk = false, afterSave }: ReportProps) {
   // 自動反映は当日その場で DB へ永続化される（useDailyReport）。手動編集は従来どおり保存ボタンで確定。
   const { v: k, setV: setK, dirty, saving, saveError, save } = useDailyReport<KenshokuRecord>({
     data,
     editable,
     reload,
     column: 'kenshoku',
+    afterSave,
     empty: emptyKenshoku,
     merge: mergeKenshoku,
     applyAuto: applyKenshokuAuto,

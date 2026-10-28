@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { fetchDailyMenuByDate, fetchMenuSetPickList, fetchSnackPickList, type PickItem } from '../lib/daily'
 import { useLoader } from '../hooks/useLoader'
 import { useRealtime } from '../hooks/useRealtime'
+import { useReloadBatch } from '../hooks/useReloadBatch'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getSnapshot, resolveCounts, subscribe } from '../lib/staffStore'
@@ -43,6 +44,8 @@ export default function DayLayout() {
   const { editable } = useAuth()
   const { data, loading, error, reload } = useLoader(() => fetchDailyMenuByDate(date), [date])
   useRealtime(['daily_menus', 'menu_sets', 'dishes', 'dish_ingredients'], reload)
+  // 検食簿と給食日誌の保存の後の取り直しを、この画面の中でまとめて1回にする（2026-10-28）
+  const afterSave = useReloadBatch()
 
   const [pickSets, setPickSets] = useState<PickItem[]>([])
   const [pickSnacks, setPickSnacks] = useState<PickItem[]>([])
@@ -104,7 +107,7 @@ export default function DayLayout() {
   if (loading && !data) return <p className="text-slate-500">読み込み中…</p>
   if (error) return <p className="text-red-600">エラー: {error}</p>
 
-  const props = { date, data, reload, editable, pickSets, pickSnacks, pickError }
+  const props = { date, data, reload, editable, pickSets, pickSnacks, pickError, afterSave }
 
   return (
     <div>

@@ -13,6 +13,8 @@ import { fetchReportColumn, saveDailyReport, type DailyMenuFull } from '../lib/d
 import { isEmpty } from '../lib/reports'
 import { todayStr } from '../lib/date'
 import { getMasterAt, resolveMaster, subscribe } from '../lib/staffStore'
+import type { ReloadBatch } from '../lib/reloadBatch'
+import { useReloadBatch } from './useReloadBatch'
 
 type Col = 'kenshoku' | 'nisshi'
 
@@ -49,8 +51,15 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
   empty: () => T
   merge: (base: T, saved: any) => T
   applyAuto: (saved: T, menuDate: string, editable: boolean) => T
+  // 保存の後の取り直しをまとめる仕組み（2026-10-28）。日別の画面は検食簿と給食日誌で同じものを渡し、
+  // 同時に走った保存の後の取り直しを1回にする。渡さない時（一括印刷の画面など）はこの呼び出しだけのものを使う
+  afterSave?: ReloadBatch
 }) {
   const { data, editable, reload, column, empty, merge, applyAuto } = cfg
+  const ownBatch = useReloadBatch()
+  const afterSave = cfg.afterSave ?? ownBatch
+  const afterSaveRef = useRef(afterSave)
+  afterSaveRef.current = afterSave
 
   // 既定の担当者は職員マスタ(report_staff)由来（reports.ts の applyAuto → staffStore.defaults()）。
   // マスタはログイン後に非同期で届くため、その時刻を購読して自動反映をやり直す（下の (a2)）。
@@ -74,6 +83,9 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     if (d.menu_date > todayStr()) return // 未来日は書かない（過去日・当日は補完対象）
     if (writeLock.current) return
     writeLock.current = true
+    const batch = afterSaveRef.current
+    const token = batch.begin()
+    let wrote = false
     try {
       // DB の最新値を基底にする＝他端末の保存を取り込み、衝突窓を縮小
       const fresh = await fetchReportColumn(d.menu_date, column)
@@ -81,16 +93,18 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
       const auto = applyAuto(base, d.menu_date, editable)
       const baseStr = JSON.stringify(base)
       const autoStr = JSON.stringify(auto)
-      const wrote = autoStr !== baseStr
+      wrote = autoStr !== baseStr
       if (wrote) await saveDailyReport(d.menu_date, { [column]: auto } as any)
       savedRef.current = autoStr // 保存済み＝「未保存」バッジを解消
       setV((cur) => mergeNewAutoFields(cur, base, auto))
-      if (wrote) reloadRef.current()
     } catch {
       // 失敗しても表示・savedRef は変えない（値を消さない）。次の tick で自動再挑戦
+      wrote = false
       console.warn(`[${column}] 自動保存を見送りました（次回再試行）`)
     } finally {
       writeLock.current = false
+      // 書いた時だけ取り直す。同時に走っている保存があれば、全部終わった後に1回だけ取り直す
+      batch.end(token, wrote ? reloadRef.current : null)
     }
   }, [editable, column, empty, merge, applyAuto])
 
@@ -146,15 +160,19 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     writeLock.current = true
     setSaving(true)
     setSaveError(null)
+    const batch = afterSaveRef.current
+    const token = batch.begin()
+    let wrote = false
     try {
       await saveDailyReport(data.menu_date, { [column]: v } as any)
       savedRef.current = JSON.stringify(v)
-      reloadRef.current()
+      wrote = true
     } catch (e: any) {
       setSaveError(String(e?.message ?? e))
     } finally {
       setSaving(false)
       writeLock.current = false
+      batch.end(token, wrote ? reloadRef.current : null)
     }
   }, [saving, data, column, v])
 
