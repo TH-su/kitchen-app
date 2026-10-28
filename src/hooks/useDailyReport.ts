@@ -13,6 +13,11 @@ import { fetchReportColumn, saveDailyReport, type DailyMenuFull } from '../lib/d
 import { isEmpty } from '../lib/reports'
 import { todayStr } from '../lib/date'
 import { getMasterAt, resolveMaster, subscribe } from '../lib/staffStore'
+import { createReloadBatch } from '../lib/reloadBatch'
+
+// 検食簿と給食日誌の保存の後の取り直しを、同時に走った保存の分まとめて1回にする（2026-10-28）。
+// 2つの画面（フックの2つの呼び出し）で共有するため、モジュールに1つだけ置く
+const afterSave = createReloadBatch()
 
 type Col = 'kenshoku' | 'nisshi'
 
@@ -74,6 +79,8 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     if (d.menu_date > todayStr()) return // 未来日は書かない（過去日・当日は補完対象）
     if (writeLock.current) return
     writeLock.current = true
+    afterSave.begin()
+    let wrote = false
     try {
       // DB の最新値を基底にする＝他端末の保存を取り込み、衝突窓を縮小
       const fresh = await fetchReportColumn(d.menu_date, column)
@@ -81,16 +88,18 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
       const auto = applyAuto(base, d.menu_date, editable)
       const baseStr = JSON.stringify(base)
       const autoStr = JSON.stringify(auto)
-      const wrote = autoStr !== baseStr
+      wrote = autoStr !== baseStr
       if (wrote) await saveDailyReport(d.menu_date, { [column]: auto } as any)
       savedRef.current = autoStr // 保存済み＝「未保存」バッジを解消
       setV((cur) => mergeNewAutoFields(cur, base, auto))
-      if (wrote) reloadRef.current()
     } catch {
       // 失敗しても表示・savedRef は変えない（値を消さない）。次の tick で自動再挑戦
+      wrote = false
       console.warn(`[${column}] 自動保存を見送りました（次回再試行）`)
     } finally {
       writeLock.current = false
+      // 書いた時だけ取り直す。同時に走っている保存があれば、全部終わった後に1回だけ取り直す
+      afterSave.end(wrote ? () => reloadRef.current() : null)
     }
   }, [editable, column, empty, merge, applyAuto])
 
@@ -146,15 +155,18 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     writeLock.current = true
     setSaving(true)
     setSaveError(null)
+    afterSave.begin()
+    let wrote = false
     try {
       await saveDailyReport(data.menu_date, { [column]: v } as any)
       savedRef.current = JSON.stringify(v)
-      reloadRef.current()
+      wrote = true
     } catch (e: any) {
       setSaveError(String(e?.message ?? e))
     } finally {
       setSaving(false)
       writeLock.current = false
+      afterSave.end(wrote ? () => reloadRef.current() : null)
     }
   }, [saving, data, column, v])
 
