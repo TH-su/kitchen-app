@@ -12,7 +12,8 @@
     "seed": "node scripts/seed.mjs",
     "parse:composition": "node scripts/parse-composition.mjs",
     "match": "node scripts/dump-ingredients.mjs && node scripts/match-ingredients.mjs",
-    "seed:composition": "node scripts/seed-composition.mjs"
+    "seed:composition": "node scripts/seed-composition.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -30,6 +31,7 @@
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
+    "vitest": "^2.1.9",
     "xlsx": "^0.18.5"
   }
 }

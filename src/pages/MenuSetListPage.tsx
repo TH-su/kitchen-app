@@ -6,6 +6,7 @@ import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../hooks/useAuth'
 import { slashDateWd, todayStr } from '../lib/date'
 import { menuPrintDensity } from '../lib/printFit'
+import { listPhase } from '../lib/listPhase'
 
 export default function MenuSetListPage() {
   const nav = useNavigate()
@@ -28,12 +29,14 @@ export default function MenuSetListPage() {
     }
   }, [])
 
+  // 読んだ一覧に区分を添える＝読み直しの間も、同じ区分の一覧なら出したままにできる（2026-10-28）
   const { data, loading, error, reload } = useLoader(
-    () => (active ? fetchMenuSets(active) : Promise.resolve([])),
+    () => (active ? fetchMenuSets(active) : Promise.resolve([])).then((items) => ({ cat: active, items })),
     [active]
   )
   useRealtime(['menu_sets', 'dishes', 'dish_ingredients'], reload)
-  const items = data ?? []
+  const items = data?.items ?? []
+  const phase = listPhase(loading, data?.cat, active)
   // 印刷面の1行分（画面カード2行目と同じ連結式）。文字サイズ段階の見積りと表描画で共用する
   const printRows = items.map((m) => ({
     id: m.id,
@@ -92,7 +95,16 @@ export default function MenuSetListPage() {
         </button>
       </div>
       {(catError || error) && <p className="text-red-600 text-sm mb-2 print:hidden">エラー: {catError || error}</p>}
-      {loading ? (
+      {/* 読み直しの間の小さな知らせ。画面の端に重ねて出し、一覧の位置は動かさない（押す邪魔もしない） */}
+      {phase === 'refresh' && (
+        <p
+          role="status"
+          className="fixed bottom-3 right-3 z-10 pointer-events-none text-xs text-slate-600 bg-white/90 border rounded px-2 py-1 shadow print:hidden"
+        >
+          更新中…
+        </p>
+      )}
+      {phase === 'first' ? (
         <p className="text-slate-500 print:hidden">読み込み中…</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 print:hidden">
