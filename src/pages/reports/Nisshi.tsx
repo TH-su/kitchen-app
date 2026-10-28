@@ -16,13 +16,14 @@ import { RadioInline, FieldInput, ComboField, MirrorField, SealBox } from './Rep
 
 const B = 'border border-slate-400'
 
-export default function Nisshi({ data, editable, reload, bulk = false }: ReportProps) {
+export default function Nisshi({ data, editable, reload, bulk = false, afterSave }: ReportProps) {
   // 自動反映は当日その場で DB へ永続化される（useDailyReport）。手動編集は従来どおり保存ボタンで確定。
   const { v: nz, setV: setNz, dirty, saving, saveError, save } = useDailyReport<NisshiRecord>({
     data,
     editable,
     reload,
     column: 'nisshi',
+    afterSave,
     empty: emptyNisshi,
     merge: mergeNisshi,
     applyAuto: applyNisshiAuto,

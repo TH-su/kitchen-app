@@ -13,11 +13,8 @@ import { fetchReportColumn, saveDailyReport, type DailyMenuFull } from '../lib/d
 import { isEmpty } from '../lib/reports'
 import { todayStr } from '../lib/date'
 import { getMasterAt, resolveMaster, subscribe } from '../lib/staffStore'
-import { createReloadBatch } from '../lib/reloadBatch'
-
-// 検食簿と給食日誌の保存の後の取り直しを、同時に走った保存の分まとめて1回にする（2026-10-28）。
-// 2つの画面（フックの2つの呼び出し）で共有するため、モジュールに1つだけ置く
-const afterSave = createReloadBatch()
+import type { ReloadBatch } from '../lib/reloadBatch'
+import { useReloadBatch } from './useReloadBatch'
 
 type Col = 'kenshoku' | 'nisshi'
 
@@ -54,8 +51,15 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
   empty: () => T
   merge: (base: T, saved: any) => T
   applyAuto: (saved: T, menuDate: string, editable: boolean) => T
+  // 保存の後の取り直しをまとめる仕組み（2026-10-28）。日別の画面は検食簿と給食日誌で同じものを渡し、
+  // 同時に走った保存の後の取り直しを1回にする。渡さない時（一括印刷の画面など）はこの呼び出しだけのものを使う
+  afterSave?: ReloadBatch
 }) {
   const { data, editable, reload, column, empty, merge, applyAuto } = cfg
+  const ownBatch = useReloadBatch()
+  const afterSave = cfg.afterSave ?? ownBatch
+  const afterSaveRef = useRef(afterSave)
+  afterSaveRef.current = afterSave
 
   // 既定の担当者は職員マスタ(report_staff)由来（reports.ts の applyAuto → staffStore.defaults()）。
   // マスタはログイン後に非同期で届くため、その時刻を購読して自動反映をやり直す（下の (a2)）。
@@ -79,7 +83,8 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     if (d.menu_date > todayStr()) return // 未来日は書かない（過去日・当日は補完対象）
     if (writeLock.current) return
     writeLock.current = true
-    afterSave.begin()
+    const batch = afterSaveRef.current
+    const token = batch.begin()
     let wrote = false
     try {
       // DB の最新値を基底にする＝他端末の保存を取り込み、衝突窓を縮小
@@ -99,7 +104,7 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     } finally {
       writeLock.current = false
       // 書いた時だけ取り直す。同時に走っている保存があれば、全部終わった後に1回だけ取り直す
-      afterSave.end(wrote ? () => reloadRef.current() : null)
+      batch.end(token, wrote ? reloadRef.current : null)
     }
   }, [editable, column, empty, merge, applyAuto])
 
@@ -155,7 +160,8 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     writeLock.current = true
     setSaving(true)
     setSaveError(null)
-    afterSave.begin()
+    const batch = afterSaveRef.current
+    const token = batch.begin()
     let wrote = false
     try {
       await saveDailyReport(data.menu_date, { [column]: v } as any)
@@ -166,7 +172,7 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     } finally {
       setSaving(false)
       writeLock.current = false
-      afterSave.end(wrote ? () => reloadRef.current() : null)
+      batch.end(token, wrote ? reloadRef.current : null)
     }
   }, [saving, data, column, v])
 

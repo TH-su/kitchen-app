@@ -6,7 +6,7 @@ import { useRealtime } from '../hooks/useRealtime'
 import { useAuth } from '../hooks/useAuth'
 import { slashDateWd, todayStr } from '../lib/date'
 import { menuPrintDensity } from '../lib/printFit'
-import { listPhase } from '../lib/listPhase'
+import { currentItems, listPhase } from '../lib/listPhase'
 
 export default function MenuSetListPage() {
   const nav = useNavigate()
@@ -35,7 +35,8 @@ export default function MenuSetListPage() {
     [active]
   )
   useRealtime(['menu_sets', 'dishes', 'dish_ingredients'], reload)
-  const items = data?.items ?? []
+  // 画面と印刷に出すのは、いまの区分の一覧だけ（区分を切り替えた時の読み込みが失敗しても、前の区分を出さない）
+  const items = currentItems(data, active)
   const phase = listPhase(loading, data?.cat, active)
   // 印刷面の1行分（画面カード2行目と同じ連結式）。文字サイズ段階の見積りと表描画で共用する
   const printRows = items.map((m) => ({
@@ -106,7 +107,7 @@ export default function MenuSetListPage() {
       )}
       {phase === 'first' ? (
         <p className="text-slate-500 print:hidden">読み込み中…</p>
-      ) : (
+      ) : phase === 'stale' ? null : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 print:hidden">
           {items.map((m) => (
             <button

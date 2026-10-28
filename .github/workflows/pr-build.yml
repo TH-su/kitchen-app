@@ -26,5 +26,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # 画面の部品の試験（vitest・tests/）。本番の Supabase にはつながない（通信する部品は試験の中で差し替える）（2026-10-28）
+      - name: 試験
+        run: npm test
       - name: Build
         run: npm run build
