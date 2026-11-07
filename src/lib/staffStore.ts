@@ -1,7 +1,7 @@
 // 候補（検食者/調理担当者）と在籍者数の読み取り専用ミニストア。
 //
 // フレームワーク非依存（React に依存しない）。useSyncExternalStore から
-// subscribe/getSnapshot 経由で購読され、GAS からの取得結果を集約する。
+// subscribe/getSnapshot 経由で購読され、GAS（または新しい保存先の読み取り口 kitchen-read）からの取得結果を集約する。
 //
 // PII 非残留規約（wsClient と同じ・ここでの保持は必要最小限に限る）:
 //   - 保持するのは職員名の配列（rosterNames）と数値2つ（counts）だけ。
@@ -12,7 +12,7 @@
 //   未接続・取得失敗・取得前は candidates() が facility.ts の env 既定値のみを返し、
 //   現行（静的リスト）と完全に同一の候補・並びになる（rosterStatus==='ok' のときだけ後置連結）。
 
-import { readSyncConfig, fetchRosterNames, fetchResidentCounts } from './wsClient'
+import { hasReadSource, fetchRosterNames, fetchResidentCounts } from './wsClient'
 import { REPORT_INSPECTORS, REPORT_COOKS, DEFAULT_INSPECTOR, DEFAULT_COOK } from './facility'
 import { fetchActiveReportStaff } from './staffMaster'
 
@@ -111,7 +111,7 @@ let rosterInFlight: Promise<void> | null = null
 async function doResolveRoster(): Promise<void> {
   try {
     // 未接続はネットワークに出ず即 fallback 確定（pending を挟まない）。
-    if (!readSyncConfig()) {
+    if (!hasReadSource()) {
       setState({ rosterStatus: 'fallback', rosterNames: null, rosterAt: Date.now() })
       return
     }
@@ -154,7 +154,7 @@ let countsInFlight: Promise<void> | null = null
 async function doResolveCounts(): Promise<void> {
   try {
     // 未接続は取得試行せず、TTL だけ更新（再取得の連打を防ぐ）。
-    if (!readSyncConfig()) {
+    if (!hasReadSource()) {
       setState({ countsAt: Date.now() })
       return
     }
