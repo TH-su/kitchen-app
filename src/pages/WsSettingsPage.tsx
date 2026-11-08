@@ -1,9 +1,11 @@
-import { useCallback, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import {
   readSyncConfig,
   saveSyncConfig,
   pingWs,
-  readKitchenReadConfig,
+  readDeviceKitchenReadConfig,
+  usesSharedKitchenRead,
+  ensureSharedKitchenRead,
   saveKitchenReadConfig,
   pingKitchenRead,
   getLastReadFrom,
@@ -84,8 +86,19 @@ export default function WsSettingsPage() {
   const [refreshing, setRefreshing] = useState(false)
 
   // 新しい保存先の読み取り口（URL と合言葉）。入力初期値は今の設定から一度だけ取り込む
-  const [readUrl, setReadUrl] = useState(() => readKitchenReadConfig()?.url ?? '')
-  const [readKey, setReadKey] = useState(() => readKitchenReadConfig()?.key ?? '')
+  // 入力欄に出すのはこの端末に入れた値だけ（全端末で共通の設定の値は画面に出さない）
+  const [readUrl, setReadUrl] = useState(() => readDeviceKitchenReadConfig()?.url ?? '')
+  const [readKey, setReadKey] = useState(() => readDeviceKitchenReadConfig()?.key ?? '')
+  const [shared, setShared] = useState(() => usesSharedKitchenRead())
+  useEffect(() => {
+    let alive = true
+    ensureSharedKitchenRead(true).then(() => {
+      if (alive) setShared(usesSharedKitchenRead())
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
   const [readMsg, setReadMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [readPing, setReadPing] = useState<'idle' | 'testing' | 'ok' | 'ng'>('idle')
 
@@ -270,6 +283,9 @@ export default function WsSettingsPage() {
         <p className="text-xs text-slate-500 mb-3">
           設定すると、在籍者数と職員の氏名を先に新しい保存先から読みます。読めない時は上の接続先（Google）から読みます。空欄で保存すると外します。
         </p>
+        {shared && (
+          <p className="text-xs text-emerald-700 mb-3">全端末で共通の設定を使っています（この端末で入れる必要はありません）。</p>
+        )}
         <div className="space-y-3">
           <label className="block text-sm font-medium text-slate-700">
             URL
