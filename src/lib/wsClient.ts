@@ -82,17 +82,79 @@ const READ_TOKEN_MIN = 32
 
 export type KitchenReadConfig = { url: string; key: string }
 
-/** 新しい保存先の読み取り口の設定を読む。無い・形が違う・壊れている時は null（＝使わず GAS だけ）。 */
+// ── 全端末で共通の設定（2026-11-08 代表者「直せ」）──
+// 厨房アプリのデータベースの app_settings（ログインした人だけが読める・施設ごと）に URL と合言葉を1回だけ入れれば、
+// 端末ごとに入れなくても全端末が読み取り口を使う。端末に入れた値があればそちらが先（試しや切り分けのため）。
+// 共通の設定はメモリにだけ持ち、端末（localStorage）には書かない。読めない時は今までどおり（端末の値か GAS）。
+const SHARED_URL_KEY = 'kitchen_read_url'
+const SHARED_KEY_KEY = 'kitchen_read_key'
+const SHARED_TTL_MS = 30 * 60 * 1000 // 読めた時の読み直しの間隔
+const SHARED_RETRY_MS = 60 * 1000 // 読めなかった時（未登録・未ログイン・失敗）の再挑戦の間隔
+let sharedCfg: KitchenReadConfig | null = null
+let sharedNextAt = 0
+let sharedInFlight: Promise<void> | null = null
+
+function validReadConfig(url: unknown, key: unknown): KitchenReadConfig | null {
+  const u = typeof url === 'string' ? url.trim() : ''
+  const k = typeof key === 'string' ? key.trim() : ''
+  if (!KITCHEN_READ_URL_RE.test(u) || k.length < READ_TOKEN_MIN) return null
+  return { url: u, key: k }
+}
+
+/**
+ * 全端末で共通の読み取り口の設定を、厨房アプリのデータベースから読む（単一飛行・30分ごと）。
+ * 例外は外へ出さない。読めない時は前に読めた値を残す（通信の失敗で読み先を Google へ戻さない）。
+ */
+export function ensureSharedKitchenRead(force = false): Promise<void> {
+  if (sharedInFlight) return sharedInFlight
+  if (!force && Date.now() < sharedNextAt) return Promise.resolve()
+  sharedInFlight = (async () => {
+    let ok = false
+    try {
+      const { fetchAppSetting } = await import('./appSettings')
+      const [u, k] = await Promise.all([fetchAppSetting(SHARED_URL_KEY), fetchAppSetting(SHARED_KEY_KEY)])
+      const cfg = validReadConfig(u, k)
+      if (cfg) {
+        sharedCfg = cfg
+        ok = true
+      } else if (u === null && k === null) {
+        sharedCfg = null // 登録が無い（消した）時は使わない
+      }
+    } catch {
+      // 未ログイン・通信の失敗: 前に読めた値を残す
+    } finally {
+      sharedNextAt = Date.now() + (ok ? SHARED_TTL_MS : SHARED_RETRY_MS)
+      sharedInFlight = null
+    }
+  })()
+  return sharedInFlight
+}
+
+/** 共通の設定を使っているか（表示専用・値は返さない）。 */
+export function usesSharedKitchenRead(): boolean {
+  return readDeviceKitchenReadConfig() === null && sharedCfg !== null
+}
+
+/** 試験用: 共通の設定の控えを消す */
+export function _resetSharedKitchenReadForTest(): void {
+  sharedCfg = null
+  sharedNextAt = 0
+  sharedInFlight = null
+}
+
+/** 新しい保存先の読み取り口の設定を読む。端末の値が先、無ければ全端末で共通の設定。どちらも無ければ null（＝使わず GAS だけ）。 */
 export function readKitchenReadConfig(): KitchenReadConfig | null {
+  return readDeviceKitchenReadConfig() ?? sharedCfg
+}
+
+/** この端末に入れた読み取り口の設定だけを読む（連携設定の画面の入力欄用）。無い・形が違う・壊れている時は null。 */
+export function readDeviceKitchenReadConfig(): KitchenReadConfig | null {
   try {
     const raw = localStorage.getItem(READ_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as { url?: unknown; key?: unknown } | null
     if (!parsed || typeof parsed !== 'object') return null
-    const url = typeof parsed.url === 'string' ? parsed.url.trim() : ''
-    const key = typeof parsed.key === 'string' ? parsed.key.trim() : ''
-    if (!KITCHEN_READ_URL_RE.test(url) || key.length < READ_TOKEN_MIN) return null
-    return { url, key }
+    return validReadConfig(parsed.url, parsed.key)
   } catch {
     return null
   }
@@ -141,6 +203,7 @@ export function getLastReadFrom(): { counts: ReadFrom; roster: ReadFrom } {
  * console.warn はエラー種別のみを出し、応答本文・合言葉は一切出力しない。
  */
 export async function postKitchenRead<T>(action: 'ping' | 'counts' | 'names', timeoutMs = 10000): Promise<T | null> {
+  await ensureSharedKitchenRead()
   const cfg = readKitchenReadConfig()
   if (!cfg) return null
   const ctrl = new AbortController()
@@ -260,7 +323,8 @@ export async function pingWs(): Promise<boolean> {
  * 設定なし/失敗/形不一致は null。
  */
 export async function fetchRosterNames(): Promise<string[] | null> {
-  // 新しい保存先の読み取り口が設定されていれば先にそちら。読めた時は GAS を呼ばない
+  // 新しい保存先の読み取り口が設定されていれば先にそちら（全端末で共通の設定も読む）。読めた時は GAS を呼ばない
+  await ensureSharedKitchenRead()
   if (readKitchenReadConfig()) {
     const fromNew = await namesFromKitchenRead()
     if (fromNew) {
@@ -310,7 +374,8 @@ async function fetchRosterNamesGas(): Promise<string[] | null> {
  * ★ 返すのは数値2つだけ（氏名・ケア内容は保持・出力しない）。設定なし/失敗/形不一致は null。
  */
 export async function fetchResidentCounts(): Promise<{ residents: number; hospitalized: number } | null> {
-  // 新しい保存先の読み取り口が設定されていれば先にそちら。読めた時は GAS を呼ばない
+  // 新しい保存先の読み取り口が設定されていれば先にそちら（全端末で共通の設定も読む）。読めた時は GAS を呼ばない
+  await ensureSharedKitchenRead()
   if (readKitchenReadConfig()) {
     const fromNew = await countsFromKitchenRead()
     if (fromNew) {

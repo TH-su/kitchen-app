@@ -12,7 +12,7 @@
 //   未接続・取得失敗・取得前は candidates() が facility.ts の env 既定値のみを返し、
 //   現行（静的リスト）と完全に同一の候補・並びになる（rosterStatus==='ok' のときだけ後置連結）。
 
-import { hasReadSource, fetchRosterNames, fetchResidentCounts } from './wsClient'
+import { hasReadSource, fetchRosterNames, fetchResidentCounts, ensureSharedKitchenRead } from './wsClient'
 import { REPORT_INSPECTORS, REPORT_COOKS, DEFAULT_INSPECTOR, DEFAULT_COOK } from './facility'
 import { fetchActiveReportStaff } from './staffMaster'
 
@@ -110,7 +110,8 @@ let rosterInFlight: Promise<void> | null = null
 
 async function doResolveRoster(): Promise<void> {
   try {
-    // 未接続はネットワークに出ず即 fallback 確定（pending を挟まない）。
+    // 全端末で共通の読み取り口の設定を先に読む（例外は出さない）。それでも未接続なら即 fallback 確定（pending を挟まない）。
+    await ensureSharedKitchenRead()
     if (!hasReadSource()) {
       setState({ rosterStatus: 'fallback', rosterNames: null, rosterAt: Date.now() })
       return
@@ -153,7 +154,8 @@ let countsInFlight: Promise<void> | null = null
 
 async function doResolveCounts(): Promise<void> {
   try {
-    // 未接続は取得試行せず、TTL だけ更新（再取得の連打を防ぐ）。
+    // 全端末で共通の読み取り口の設定を先に読む。それでも未接続なら取得試行せず、TTL だけ更新（再取得の連打を防ぐ）。
+    await ensureSharedKitchenRead()
     if (!hasReadSource()) {
       setState({ countsAt: Date.now() })
       return
