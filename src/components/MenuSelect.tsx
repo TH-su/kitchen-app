@@ -1,8 +1,10 @@
 import type { PickItem } from '../lib/daily'
+import { byMenuNumber } from '../lib/menuOrder'
 
 // 昼食・夕食で「朝以外」を並べる順（左カテゴリの指定順）
 const NON_BREAKFAST_ORDER = ['豚', '鶏', '牛', '魚', 'ミンチ', 'めん', '行事', 'その他', 'ご当地']
-const bySeq = (a: PickItem, b: PickItem) => (a.seq_no ?? 1e9) - (b.seq_no ?? 1e9)
+// 朝食・昼食・夕食とも、番号の末尾の数字の順（後から足したメニューも同じ並び・2026-11-12 本人指示）
+const bySeq = (a: PickItem, b: PickItem) => byMenuNumber(a, b)
 
 // native <select>。選択済みからでも直接開いて上書きできる（datalist の「クリア必須」問題を解消）。
 // value はメニューID（文字列）。'' = 未選択。
