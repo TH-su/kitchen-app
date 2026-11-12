@@ -114,10 +114,10 @@ export default function MenuSetListPage() {
               key={m.id}
               onClick={() => nav(`/set/${m.id}`)}
               aria-label={`${m.code} ${[m.staple, m.main, m.side1, m.side2, m.soup].filter(Boolean).join(' ')}`}
-              className="text-left bg-white rounded-lg border p-3 hover:border-emerald-400 hover:shadow transition"
+              className="text-left bg-white rounded-lg border px-3 py-2 hover:border-emerald-400 hover:shadow transition"
             >
-              <div className="font-bold text-emerald-700">{m.code}</div>
-              <div className="text-sm text-slate-600 mt-1">
+              <div className="font-bold text-lg text-emerald-700">{m.code}</div>
+              <div className="text-base text-slate-600 mt-1">
                 {[m.staple, m.main, m.side1, m.side2, m.soup].filter(Boolean).join(' / ')}
               </div>
             </button>
