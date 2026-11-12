@@ -3,7 +3,7 @@ import { byMenuNumber } from '../lib/menuOrder'
 
 // 昼食・夕食で「朝以外」を並べる順（左カテゴリの指定順）
 const NON_BREAKFAST_ORDER = ['豚', '鶏', '牛', '魚', 'ミンチ', 'めん', '行事', 'その他', 'ご当地']
-// 朝食・昼食・夕食とも、番号の末尾の数字の順（後から足したメニューも同じ並び・2026-11-12 本人指示）
+// 朝食・昼食・夕食・おやつとも、番号の末尾の数字の順（後から足したメニューも同じ並び・2026-11-12 本人指示）
 const bySeq = (a: PickItem, b: PickItem) => byMenuNumber(a, b)
 
 // native <select>。選択済みからでも直接開いて上書きできる（datalist の「クリア必須」問題を解消）。
@@ -23,7 +23,7 @@ export default function MenuSelect({
 }) {
   let groups: { label: string; opts: PickItem[] }[]
   if (kind === 'snack') {
-    groups = [{ label: '', opts: items }]
+    groups = [{ label: '', opts: [...items].sort(bySeq) }]
   } else if (kind === 'breakfast') {
     groups = [{ label: '', opts: items.filter((i) => i.category === '朝').sort(bySeq) }]
   } else {

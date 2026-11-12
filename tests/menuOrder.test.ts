@@ -42,3 +42,15 @@ describe('byMenuNumber', () => {
     expect([...items].sort(byMenuNumber).map((i) => i.code)).toEqual(['行事C', '行事A', '行事B'])
   })
 })
+
+describe('おやつの番号', () => {
+  it('登録の順に関係なく番号の順に並ぶ', () => {
+    const items = [
+      { id: 970, code: 'お70', seq_no: null },
+      { id: 945, code: 'お㊿', seq_no: null },
+      { id: 969, code: 'お69', seq_no: null },
+      { id: 896, code: 'お①', seq_no: null },
+    ]
+    expect([...items].sort(byMenuNumber).map((i) => i.code)).toEqual(['お①', 'お㊿', 'お69', 'お70'])
+  })
+})
