@@ -68,12 +68,12 @@ export default function DailyMenuListPage() {
             <button
               key={d.id}
               onClick={() => nav(`/day/${d.menu_date}`)}
-              className="text-left bg-white rounded-lg border p-3 hover:border-emerald-400 hover:shadow transition"
+              className="text-left bg-white rounded-lg border px-3 py-2 hover:border-emerald-400 hover:shadow transition"
             >
-              <div className="font-bold text-emerald-700">
-                {d.menu_date} <span className="text-xs font-normal text-slate-500">食数 {d.meal_count}</span>
+              <div className="font-bold text-lg text-emerald-700">
+                {d.menu_date} <span className="text-sm font-normal text-slate-500">食数 {d.meal_count}</span>
               </div>
-              <div className="text-sm text-slate-600 mt-1">
+              <div className="text-base text-slate-600 mt-1">
                 朝 {d.breakfast ?? '—'} / 昼 {d.lunch ?? '—'} / 夕 {d.dinner ?? '—'}
                 {d.snack ? ` / お:${d.snack}` : ''}
               </div>
