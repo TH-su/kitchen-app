@@ -162,8 +162,21 @@ describe('在籍者数（fetchResidentCounts）', () => {
     expect(await fetchResidentCounts()).toEqual({ residents: 31, hospitalized: 2 })
     expect(gasCalls()).toHaveLength(0)
   })
+  it('切り替える前（409・shadow）の時だけ今までどおり GAS から読む', async () => {
+    setGas()
+    setRead()
+    replies.read.counts = { status: 409, body: { ok: false, code: 'shadow' } }
+    expect(await fetchResidentCounts()).toEqual({ residents: 2, hospitalized: 1 })
+    expect(readCalls()).toHaveLength(1)
+    expect(gasCalls()).toHaveLength(1)
+    expect(gasCalls()[0].body).toMatchObject({ action: 'get', key: 'care_schedule_v2' })
+    expect(gasCalls()[0].body.kitchenKey).toBeUndefined()
+    expect(getLastReadFrom().counts).toBe('gas')
+  })
+  // 2026-11-15（M1 順4）: 読み取り口を設定した端末は、切り替える前（409・shadow）の時だけ GAS へ戻す
   for (const [label, reply] of [
-    ['切り替える前（409）', { status: 409, body: { ok: false, code: 'shadow' } }],
+    ['409 でも code が shadow でない', { status: 409, body: { ok: false, code: 'other' } }],
+    ['409 で本文が読めない', { status: 409, body: null }],
     ['合言葉が違う（401）', { status: 401, body: { ok: false, code: 'key' } }],
     ['設定がまだ（503）', { status: 503, body: { ok: false, code: 'notset' } }],
     ['通信の失敗', { throws: true }],
@@ -173,16 +186,13 @@ describe('在籍者数（fetchResidentCounts）', () => {
     ['数が小数', { body: { ok: true, residents: 1.5, hospitalized: 0 } }],
     ['入院が在籍より多い', { body: { ok: true, residents: 1, hospitalized: 2 } }],
   ] as [string, Reply][]) {
-    it(`${label}の時は今までどおり GAS から読む`, async () => {
+    it(`${label}の時は GAS へ戻さず null（前に読めた数を残す）`, async () => {
       setGas()
       setRead()
       replies.read.counts = reply
-      expect(await fetchResidentCounts()).toEqual({ residents: 2, hospitalized: 1 })
+      expect(await fetchResidentCounts()).toBeNull()
       expect(readCalls()).toHaveLength(1)
-      expect(gasCalls()).toHaveLength(1)
-      expect(gasCalls()[0].body).toMatchObject({ action: 'get', key: 'care_schedule_v2' })
-      expect(gasCalls()[0].body.kitchenKey).toBeUndefined()
-      expect(getLastReadFrom().counts).toBe('gas')
+      expect(gasCalls()).toHaveLength(0)
     })
   }
   it('読み取り口が無い時は GAS だけ（今までと同じ）', async () => {
@@ -214,20 +224,31 @@ describe('職員の氏名（fetchRosterNames）', () => {
     expect(await fetchRosterNames()).toEqual([])
     expect(gasCalls()).toHaveLength(0)
   })
+  it('切り替える前（409・shadow）の時だけ今までどおり GAS から読む', async () => {
+    setGas()
+    setRead()
+    replies.read.names = { status: 409, body: { ok: false, code: 'shadow' } }
+    expect(await fetchRosterNames()).toEqual(['見本 古い職員'])
+    expect(gasCalls()).toHaveLength(1)
+    expect(gasCalls()[0].body).toMatchObject({ action: 'pull', keys: ['staff'] })
+    expect(getLastReadFrom().roster).toBe('gas')
+  })
+  // 2026-11-15（M1 順4）: 2026-10-16 から更新されていない Google の勤務表へ戻さない
   for (const [label, reply] of [
-    ['切り替える前（409）', { status: 409, body: { ok: false, code: 'shadow' } }],
+    ['409 でも code が shadow でない', { status: 409, body: { ok: false } }],
+    ['合言葉が違う（401）', { status: 401, body: { ok: false, code: 'key' } }],
+    ['設定がまだ（503）', { status: 503, body: { ok: false, code: 'notset' } }],
     ['通信の失敗', { throws: true }],
     ['氏名が配列でない', { body: { ok: true, names: '見本' } }],
     ['氏名に文字でない物', { body: { ok: true, names: ['見本 職員一', { name: '見本' }] } }],
   ] as [string, Reply][]) {
-    it(`${label}の時は今までどおり GAS から読む`, async () => {
+    it(`${label}の時は GAS（古い一覧）へ戻さず null`, async () => {
       setGas()
       setRead()
       replies.read.names = reply
-      expect(await fetchRosterNames()).toEqual(['見本 古い職員'])
-      expect(gasCalls()).toHaveLength(1)
-      expect(gasCalls()[0].body).toMatchObject({ action: 'pull', keys: ['staff'] })
-      expect(getLastReadFrom().roster).toBe('gas')
+      expect(await fetchRosterNames()).toBeNull()
+      expect(readCalls()).toHaveLength(1)
+      expect(gasCalls()).toHaveLength(0)
     })
   }
 })
