@@ -91,6 +91,8 @@ const SHARED_KEY_KEY = 'kitchen_read_key'
 const SHARED_TTL_MS = 30 * 60 * 1000 // 読めた時の読み直しの間隔
 const SHARED_RETRY_MS = 60 * 1000 // 読めなかった時（未登録・未ログイン・失敗）の再挑戦の間隔
 let sharedCfg: KitchenReadConfig | null = null
+// 共通の設定を一度でも読めたか（値があった・無いと分かった）。読めないうちは「設定が無い」と決めず、GAS へ行かない（2026-11-15・M1 順4）
+let sharedKnown = false
 let sharedNextAt = 0
 let sharedInFlight: Promise<void> | null = null
 
@@ -120,6 +122,7 @@ export function ensureSharedKitchenRead(force = false): Promise<void> {
       } else if (u === null && k === null) {
         sharedCfg = null // 登録が無い（消した）時は使わない
       }
+      sharedKnown = true // 読めた（形が違う値も「読めた」に数える＝今までどおり使わない）
     } catch {
       // 未ログイン・通信の失敗: 前に読めた値を残す
     } finally {
@@ -138,8 +141,17 @@ export function usesSharedKitchenRead(): boolean {
 /** 試験用: 共通の設定の控えを消す */
 export function _resetSharedKitchenReadForTest(): void {
   sharedCfg = null
+  sharedKnown = false
   sharedNextAt = 0
   sharedInFlight = null
+}
+
+/**
+ * GAS から読んでよいか（読み取り口の設定が無い端末の時）。端末にも共通の設定にも読み取り口が無いと分かった時だけ true。
+ * 共通の設定をまだ一度も読めていない（起動直後の通信の失敗など）間は false＝ GAS（2026-10-16 から更新されていない勤務表）へ行かない。
+ */
+function gasAllowedWithoutRead(): boolean {
+  return readDeviceKitchenReadConfig() === null && sharedKnown
 }
 
 /** 新しい保存先の読み取り口の設定を読む。端末の値が先、無ければ全端末で共通の設定。どちらも無ければ null（＝使わず GAS だけ）。 */
@@ -348,14 +360,20 @@ export async function fetchRosterNames(): Promise<string[] | null> {
   await ensureSharedKitchenRead()
   if (readKitchenReadConfig()) {
     const fromNew = await namesFromKitchenRead()
-    if (fromNew === null) return null // 読めない時は GAS（古い一覧）へ戻さない
+    if (fromNew === null) {
+      lastFrom.roster = null // 読めない時は GAS（古い一覧）へ戻さない。前の読み先を出し続けない
+      return null
+    }
     if (fromNew !== 'shadow') {
       lastFrom.roster = 'kitchen-read'
       return fromNew
     }
+  } else if (!gasAllowedWithoutRead()) {
+    lastFrom.roster = null // 共通の設定をまだ読めていない間は GAS へ行かない
+    return null
   }
   const names = await fetchRosterNamesGas()
-  if (names) lastFrom.roster = 'gas'
+  lastFrom.roster = names ? 'gas' : null
   return names
 }
 
@@ -401,14 +419,20 @@ export async function fetchResidentCounts(): Promise<{ residents: number; hospit
   await ensureSharedKitchenRead()
   if (readKitchenReadConfig()) {
     const fromNew = await countsFromKitchenRead()
-    if (fromNew === null) return null // 読めない時は GAS へ戻さない（前に読めた数を残す）
+    if (fromNew === null) {
+      lastFrom.counts = null // 読めない時は GAS へ戻さない（前に読めた数を残す）。前の読み先を出し続けない
+      return null
+    }
     if (fromNew !== 'shadow') {
       lastFrom.counts = 'kitchen-read'
       return fromNew
     }
+  } else if (!gasAllowedWithoutRead()) {
+    lastFrom.counts = null // 共通の設定をまだ読めていない間は GAS へ行かない
+    return null
   }
   const counts = await fetchResidentCountsGas()
-  if (counts) lastFrom.counts = 'gas'
+  lastFrom.counts = counts ? 'gas' : null
   return counts
 }
 

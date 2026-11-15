@@ -176,7 +176,7 @@ describe('在籍者数（fetchResidentCounts）', () => {
   // 2026-11-15（M1 順4）: 読み取り口を設定した端末は、切り替える前（409・shadow）の時だけ GAS へ戻す
   for (const [label, reply] of [
     ['409 でも code が shadow でない', { status: 409, body: { ok: false, code: 'other' } }],
-    ['409 で本文が読めない', { status: 409, body: null }],
+    ['409 で code が無い', { status: 409, body: {} }],
     ['合言葉が違う（401）', { status: 401, body: { ok: false, code: 'key' } }],
     ['設定がまだ（503）', { status: 503, body: { ok: false, code: 'notset' } }],
     ['通信の失敗', { throws: true }],
@@ -331,11 +331,31 @@ describe('全端末で共通の設定（app_settings）', () => {
       expect(readCalls()).toHaveLength(0)
     }
   })
-  it('共通の設定を読めない時（未ログイン・通信の失敗）は例外を出さず、GAS から読む', async () => {
+  // 2026-11-15（M1 順4）: 共通の設定をまだ一度も読めていない間は「設定が無い」と決めず、GAS（古い勤務表）へ行かない
+  it('共通の設定をまだ読めていない時（起動直後の通信の失敗）は例外を出さず、GAS へも行かず null', async () => {
     shared.fail = true
+    setGas()
+    expect(await fetchResidentCounts()).toBeNull()
+    expect(await fetchRosterNames()).toBeNull()
+    expect(readCalls()).toHaveLength(0)
+    expect(gasCalls()).toHaveLength(0)
+    expect(getLastReadFrom()).toEqual({ counts: null, roster: null })
+  })
+  it('共通の設定が無いと分かった端末（登録なし）は今までどおり GAS から読む', async () => {
     setGas()
     expect(await fetchResidentCounts()).toEqual({ residents: 2, hospitalized: 1 })
     expect(readCalls()).toHaveLength(0)
+    expect(gasCalls()).toHaveLength(1)
+  })
+  it('読めなかった時は、前に読めた読み先を出し続けない', async () => {
+    setGas()
+    setRead()
+    replies.read.counts = { body: { ok: true, residents: 3, hospitalized: 0 } }
+    await fetchResidentCounts()
+    expect(getLastReadFrom().counts).toBe('kitchen-read')
+    replies.read.counts = { status: 401, body: { ok: false, code: 'key' } }
+    expect(await fetchResidentCounts()).toBeNull()
+    expect(getLastReadFrom().counts).toBeNull()
   })
   it('一度読めた共通の設定は、後で読めなくなっても残す（通信の失敗で Google へ戻さない）', async () => {
     setShared()
