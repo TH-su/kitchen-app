@@ -12,7 +12,7 @@ import { readdirSync } from 'node:fs'
 import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '..', '.env') })
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 
 const APPLY = process.argv.includes('--apply')
 const FACILITY_ID = facilityIdFromArgs()

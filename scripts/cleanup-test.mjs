@@ -9,7 +9,7 @@ import { facilityIdFromArgs, assertFacilityExists } from './_facility.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: join(ROOT, '.env') })
-const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { db: { schema: 'kitchen' },
   auth: { persistSession: false },
 })
 

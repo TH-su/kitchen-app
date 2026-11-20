@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '..', '.env') })
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 const EMAIL = 'simtest@example.com'
 // パスワードは実行ごとの乱数（2026-10-21）。公開リポジトリに固定の値を置くと、本番に残った検証用アカウントに誰でも入れるため。
 // 画面に1回出すだけで、ファイルには残さない。

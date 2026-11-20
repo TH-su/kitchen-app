@@ -19,7 +19,7 @@ dotenv.config({ path: join(ROOT, '.env') })
 const url = process.env.SUPABASE_URL
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!url || !key) { console.error('❌ .env に接続情報が必要'); process.exit(1) }
-const sb = createClient(url, key, { auth: { persistSession: false } })
+const sb = createClient(url, key, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 const FACILITY_ID = facilityIdFromArgs()
 await assertFacilityExists(sb, FACILITY_ID)
 
