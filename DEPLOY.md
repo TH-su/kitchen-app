@@ -205,3 +205,12 @@ cd ~/Claude/Projects/kitchen-app && bash supabase/tests/run.sh
 ```bash
 cd ~/Claude/Projects/kitchen-app && bash supabase/tests/mutants.sh
 ```
+
+## 2026-11-20 介護ツールの DB へ移した（統合 0116）
+
+- 厨房の表・ビュー・関数は、介護ツールの Supabase（care-log）の箱 **kitchen** にある（Supabase の無料の枠を1つ空けるため・代表者の決定）。旧 Menu app は一時停止（消していない・戻す道として残す）
+- 箱の形の正本は care-backend の `supabase/migrations/0116_kitchen_schema.sql`。このリポジトリの `supabase/migrations/0001〜0011` は Menu app 時代の履歴（新しく流さない）
+- アプリと道具（scripts/*.mjs）は `createClient(..., { db: { schema: 'kitchen' } })` で kitchen を読む書きする。変更の通知（useRealtime）も kitchen
+- GitHub の Secrets `VITE_SUPABASE_URL`・`VITE_SUPABASE_ANON_KEY` は care-log の値（介護ツールと同じ公開用の鍵）
+- 厨房のアカウントは介護の許可リスト（allowed_accounts）に入れない。新しい人は care-log の `kitchen_private.logins` に行を入れ、`allow_create` を立てている間だけ作れる（作ったら外す）。介護の表は読めない
+- 道具（seed など）の `SUPABASE_SERVICE_ROLE_KEY` は care-log の秘密の鍵になる。介護の本番の DB に強い鍵で触るので、使う時は kitchen の箱だけに触る道具か確かめてから流す

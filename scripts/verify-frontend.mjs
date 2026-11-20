@@ -12,7 +12,7 @@ if (!url || !key) {
   console.error('❌ VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY が未設定')
   process.exit(1)
 }
-const sb = createClient(url, key, { auth: { persistSession: false } })
+const sb = createClient(url, key, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 const one = (v) => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 
 // 1) カテゴリ取得（anonでread可か）

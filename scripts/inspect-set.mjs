@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: join(__dirname, '..', '.env') })
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 // 施設を指定して読む（2026-10-18 改善プロンプト第2弾の15）。service role は RLS を通らないので、絞らないと全施設の行を読む
 const FACILITY_ID = facilityIdFromArgs()
 await assertFacilityExists(sb, FACILITY_ID)

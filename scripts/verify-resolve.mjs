@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 dotenv.config({ path: join(ROOT, '.env') })
-const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY, {
+const sb = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_ANON_KEY, { db: { schema: 'kitchen' },
   auth: { persistSession: false },
 })
 const resolveSet = async (code) => {

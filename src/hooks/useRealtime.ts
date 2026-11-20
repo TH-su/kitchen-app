@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, DB_SCHEMA } from '../lib/supabase'
 
 // 自分が会員の施設（1人1施設）。購読を「自分の施設の行」に絞るために使う（2026-10-23・修正点 G30）。
 // 削除の通知は RLS を通らずに購読者全員へ届くため、facility_id で絞らないと他施設の削除（主キー）まで届く。
@@ -51,7 +51,7 @@ export function useRealtime(tables: string[], onChange: () => void) {
       }
       ch = supabase.channel('rt-' + tables.join('-'))
       for (const t of tables) {
-        ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: `facility_id=eq.${fid}` }, fire)
+        ch.on('postgres_changes', { event: '*', schema: DB_SCHEMA, table: t, filter: `facility_id=eq.${fid}` }, fire)
       }
       ch.subscribe()
     }

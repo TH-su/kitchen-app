@@ -20,7 +20,7 @@ if (!url || !key) {
   console.error('❌ .env に SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が必要')
   process.exit(1)
 }
-const sb = createClient(url, key, { auth: { persistSession: false } })
+const sb = createClient(url, key, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 // 施設を指定して読む（2026-10-18 改善プロンプト第2弾の15）。service role は RLS を通らないので、絞らないと全施設の行を読む
 const FACILITY_ID = facilityIdFromArgs()
 await assertFacilityExists(sb, FACILITY_ID)

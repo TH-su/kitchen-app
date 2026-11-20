@@ -21,8 +21,8 @@ if (!URL || !SERVICE || !ANON) {
 const EMAIL = 'uitest@example.com'
 // パスワードは実行ごとの乱数（2026-10-21）。固定の値が公開リポジトリにあると、本番に残ったテストユーザーに誰でも入れるため。
 const PASSWORD = randomBytes(18).toString('base64url')
-const admin = createClient(URL, SERVICE, { auth: { persistSession: false } })
-const anon = createClient(URL, ANON, { auth: { persistSession: false } })
+const admin = createClient(URL, SERVICE, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
+const anon = createClient(URL, ANON, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 const one = (v) => (Array.isArray(v) ? v[0] ?? null : v ?? null)
 const FACILITY_ID = facilityIdFromArgs()
 await assertFacilityExists(admin, FACILITY_ID)

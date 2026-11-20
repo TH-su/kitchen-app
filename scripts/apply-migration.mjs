@@ -10,7 +10,7 @@ console.log('接続系の環境変数(名前のみ):', names.join(', ') || '(な
 
 // staple_grain_g 列が既に存在するかを PostgREST 経由で判定（SELECTしてエラー種別を見る）
 const { createClient } = await import('@supabase/supabase-js')
-const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, { db: { schema: 'kitchen' }, auth: { persistSession: false } })
 const { error } = await sb.from('daily_menus').select('staple_grain_g').limit(1)
 if (!error) console.log('✅ staple_grain_g 列は既に存在します')
 else console.log('⚠ staple_grain_g 列なし or エラー:', error.message)
