@@ -11,6 +11,7 @@ import WorkInstruction from './reports/WorkInstruction'
 import Kenshoku from './reports/Kenshoku'
 import Nisshi from './reports/Nisshi'
 import Kondate from './reports/Kondate'
+import { confirmLeave } from '../lib/unsavedGuard'
 
 const TABS = [
   { key: 'work', label: '作業指示書' },
@@ -105,14 +106,27 @@ export default function DayLayout() {
   }
 
   if (loading && !data) return <p className="text-slate-500">読み込み中…</p>
-  if (error) return <p className="text-red-600">エラー: {error}</p>
+  // 取り直しに一度失敗しても、この日の帳票（入力中の値）は消さずに残し、上に知らせだけを出す
+  // （窓に戻った瞬間の通信切れで、書きかけの検食簿・給食日誌が消えていた＝2026-11-28 点検 中3）。
+  // 前の日の値しか無い時（日付を移った直後の失敗）は、取り違えないよう今までどおりエラーだけを出す
+  const keepOnError = !!data && data.menu_date === date
+  if (error && !keepOnError) return <p className="text-red-600">エラー: {error}</p>
+  // 画面の中で移る時は、保存していない入力があれば確かめる（2026-11-28 点検 中4）
+  const go = (to: string) => {
+    if (confirmLeave()) nav(to)
+  }
 
   const props = { date, data, reload, editable, pickSets, pickSnacks, pickError, afterSave }
 
   return (
     <div>
+      {error && (
+        <p role="status" className="mb-3 print:hidden text-sm text-red-700 bg-red-50 border border-red-300 rounded px-2 py-1">
+          最新の内容を読み込めませんでした（入力中の内容はそのまま残しています）。通信状態を確認してください: {error}
+        </p>
+      )}
       <div className="flex items-center gap-1 mb-3 print:hidden flex-wrap">
-        <button onClick={() => nav('/days')} className="text-emerald-700 text-sm min-h-[40px] px-2 mr-2">
+        <button onClick={() => go('/days')} className="text-emerald-700 text-sm min-h-[40px] px-2 mr-2">
           ← 一覧
         </button>
         {TABS.map((t) => (
@@ -154,7 +168,7 @@ export default function DayLayout() {
       {/* 日付の前後移動（前日◀ / ▶翌日）。印刷時は非表示 */}
       <div className="flex items-center justify-center gap-3 mb-3 print:hidden">
         <button
-          onClick={() => nav(`/day/${shiftDate(date, -1)}`)}
+          onClick={() => go(`/day/${shiftDate(date, -1)}`)}
           className="min-h-[40px] min-w-[44px] px-3 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50"
           aria-label="前日"
         >
@@ -162,7 +176,7 @@ export default function DayLayout() {
         </button>
         <span className="text-base font-bold text-slate-800 min-w-[8rem] text-center">{dateLabel(date)}</span>
         <button
-          onClick={() => nav(`/day/${shiftDate(date, 1)}`)}
+          onClick={() => go(`/day/${shiftDate(date, 1)}`)}
           className="min-h-[40px] min-w-[44px] px-3 rounded border bg-white text-slate-700 text-lg font-bold hover:bg-slate-50"
           aria-label="翌日"
         >

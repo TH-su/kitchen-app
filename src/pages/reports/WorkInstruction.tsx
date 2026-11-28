@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   upsertDailyMenu,
+  fetchDailyMenuByDate,
   dailyNutritionEx,
   mealKcal,
   scaledPerPerson,
@@ -15,9 +16,28 @@ import MenuSelect from '../../components/MenuSelect'
 import { slashDateWd } from '../../lib/date'
 import { useKitchenLabel } from '../../hooks/useKitchenLabel'
 import type { ReportProps } from './types'
+import { registerUnsaved } from '../../lib/unsavedGuard'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 const numOrNull = (s: string) => (s ? Number(s) : null)
+
+// 選択パネルの値（画面の入力は文字）。開いた時の値と比べて、この画面で触った項目を見分ける（2026-11-28 点検 中2）
+type Panel = { mealCount: string; bf: string; ln: string; dn: string; snack: string; note: string; grainG: string }
+const panelOf = (data: DailyMenuFull | null): Panel => ({
+  mealCount: data ? String(data.meal_count) : '30',
+  bf: data?.breakfastSetId ? String(data.breakfastSetId) : '',
+  ln: data?.lunchSetId ? String(data.lunchSetId) : '',
+  dn: data?.dinnerSetId ? String(data.dinnerSetId) : '',
+  snack: data?.snackDishId ? String(data.snackDishId) : '',
+  note: data?.note ?? '',
+  grainG: String(data?.stapleGrainG ?? STAPLE_DEFAULT_G),
+})
+/** 触った項目（開いた時の値と違う）は画面の値、触っていない項目は新しい値 */
+export function rebasePanel(cur: Panel, opened: Panel, next: Panel): Panel {
+  const out = { ...cur }
+  for (const k of Object.keys(next) as (keyof Panel)[]) if (cur[k] === opened[k]) out[k] = next[k]
+  return out
+}
 const BORDER = 'border border-slate-400'
 // 料理（主食・副食・汁物…）の切れ目に引く太罫線。同じ料理の食材どうしは細罫線のまま
 const DISH_LINE = 'border-t-2 border-t-slate-700'
@@ -253,35 +273,85 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   const [saveError, setSaveError] = useState<string | null>(null)
   const [grainNotPersisted, setGrainNotPersisted] = useState(false)
 
-  // data → 選択パネル同期（日付 or レコード変化時のみ。編集中の realtime では極力触らない）
+  // 画面の値を作った元（最後に知った DB の値）。画面の値と同じ描画の組になるよう state で持つ（2026-11-28 反証）
+  const [opened, setOpened] = useState<Panel>(() => panelOf(null))
+  const keyRef = useRef('')
+  const setPanel = (p: Panel) => {
+    setMealCount(p.mealCount)
+    setBf(p.bf)
+    setLn(p.ln)
+    setDn(p.dn)
+    setSnack(p.snack)
+    setNote(p.note)
+    setGrainG(p.grainG)
+  }
+  const curPanel = (): Panel => ({ mealCount, bf, ln, dn, snack, note, grainG })
+  // 選択パネルを触って保存していない時は、画面の中で移る前に確かめる（2026-11-28 点検 中4）
+  const panelDirtyRef = useRef(false)
+  panelDirtyRef.current = editable && JSON.stringify(curPanel()) !== JSON.stringify(opened)
+  useEffect(() => registerUnsaved(() => panelDirtyRef.current), [])
+
+  // data → 選択パネル同期（日付 or レコード変化時は作り直す）
   useEffect(() => {
-    setMealCount(data ? String(data.meal_count) : '30')
-    setBf(data?.breakfastSetId ? String(data.breakfastSetId) : '')
-    setLn(data?.lunchSetId ? String(data.lunchSetId) : '')
-    setDn(data?.dinnerSetId ? String(data.dinnerSetId) : '')
-    setSnack(data?.snackDishId ? String(data.snackDishId) : '')
-    setNote(data?.note ?? '')
-    setGrainG(String(data?.stapleGrainG ?? STAPLE_DEFAULT_G))
+    const p = panelOf(data)
+    keyRef.current = `${date}|${data?.id ?? ''}`
+    setOpened(p)
+    setPanel(p)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, data?.id])
+
+  // 同じ日の取り直し（他の端末の保存・食数へ反映）は、この画面で触っていない項目にだけ入れる。
+  // 触った項目（書きかけ）は残す（2026-11-28 点検 中2）
+  useEffect(() => {
+    if (keyRef.current !== `${date}|${data?.id ?? ''}`) return
+    const next = panelOf(data)
+    if (JSON.stringify(next) === JSON.stringify(opened)) return
+    setOpened(next)
+    setPanel(rebasePanel(curPanel(), opened, next))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
   const save = async () => {
     if (saving) return // 二重保存ガード（連打・遅延クリック対策）
     setSaving(true)
     setSaveError(null)
     try {
-      const n = Number(mealCount)
+      // 保存の直前に最新を読み、この画面で触った項目だけを最新に重ねて書く
+      // （開いたままの端末が、他の端末で変えた献立・食数・メモを古い値に戻さない＝2026-11-28 点検 中2）
+      // 画面の値と開いた時の値は、押した時の同じ描画の組で取る（await の前）
+      const mine = curPanel()
+      const base = opened
+      const key = keyRef.current
+      const latest = await fetchDailyMenuByDate(date)
+      const p = latest ? rebasePanel(mine, base, panelOf(latest)) : mine
+      const n = Number(p.mealCount)
       if (!Number.isInteger(n) || n < 1 || n > 100000) throw new Error('食数は1以上の整数で入力してください')
+      const grainSaved =
+        p.grainG.trim() === '' ? latest?.stapleGrainG ?? data?.stapleGrainG ?? STAPLE_DEFAULT_G : normalizeGrainG(Number(p.grainG))
       await upsertDailyMenu({
         menu_date: date,
         meal_count: n,
-        breakfast_set_id: numOrNull(bf),
-        lunch_set_id: numOrNull(ln),
-        dinner_set_id: numOrNull(dn),
-        snack_dish_id: numOrNull(snack),
-        note: note.trim() || null,
-        staple_grain_g: grainG.trim() === '' ? data?.stapleGrainG ?? STAPLE_DEFAULT_G : normalizeGrainG(Number(grainG)),
+        breakfast_set_id: numOrNull(p.bf),
+        lunch_set_id: numOrNull(p.ln),
+        dinner_set_id: numOrNull(p.dn),
+        snack_dish_id: numOrNull(p.snack),
+        note: p.note.trim() || null,
+        staple_grain_g: grainSaved,
       })
+      // 保存した値（整えた後）を開いた時の値に進める。押した後に触っていない項目は保存した値にそろえる
+      // （整えた値・空欄の主食量で「未保存」が残り、移るたびに確かめが出ていた＝2026-11-28 反証 低3）
+      if (keyRef.current === key) {
+        const sp: Panel = { ...p, mealCount: String(n), note: p.note.trim(), grainG: String(grainSaved) }
+        setOpened(sp)
+        const keep = (cur: string, was: string, to: string) => (cur === was ? to : cur)
+        setMealCount((c) => keep(c, mine.mealCount, sp.mealCount))
+        setBf((c) => keep(c, mine.bf, sp.bf))
+        setLn((c) => keep(c, mine.ln, sp.ln))
+        setDn((c) => keep(c, mine.dn, sp.dn))
+        setSnack((c) => keep(c, mine.snack, sp.snack))
+        setNote((c) => keep(c, mine.note, sp.note))
+        setGrainG((c) => keep(c, mine.grainG, sp.grainG))
+      }
       setGrainNotPersisted(!isStapleColAvailable()) // 列欠落フォールバック時は主食量が保存されていない
       reload()
     } catch (e: any) {

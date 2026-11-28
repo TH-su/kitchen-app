@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { HashRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import MenuSetListPage from './pages/MenuSetListPage'
 import MenuSetDetailPage from './pages/MenuSetDetailPage'
@@ -19,12 +19,19 @@ import LoginBar from './components/LoginBar'
 import ErrorBoundary from './components/ErrorBoundary'
 import { useAuth } from './hooks/useAuth'
 import { useKitchenLabel } from './hooks/useKitchenLabel'
+import { confirmLeave } from './lib/unsavedGuard'
+
+// 上のタブ・職員・連携へ移る前に、保存していない入力があれば確かめる（2026-11-28 点検 中4）
+const guardLeave = (e: { preventDefault: () => void }) => {
+  if (!confirmLeave()) e.preventDefault()
+}
 
 function Tab({ to, children }: { to: string; children: ReactNode }) {
   return (
     <NavLink
       to={to}
       end
+      onClick={guardLeave}
       className={({ isActive }) =>
         `inline-flex items-center min-h-[44px] px-4 text-sm font-medium border-b-2 ${
           isActive ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500'
@@ -62,6 +69,18 @@ function KitchenLabelLine() {
 function AppShell() {
   const { session, ready } = useAuth()
   const location = useLocation()
+  // ログアウトした・別の人に替わった時は読み込み直す。前の人の連携設定・職員の名簿・在籍数のメモリの控えを
+  // 次の人へ持ち越さない（ログイン画面へ戻るだけでは控えが残っていた＝2026-11-28 点検 低6）
+  const uidRef = useRef<string | null>(null)
+  const uid = ready ? session?.user?.id ?? null : undefined
+  useEffect(() => {
+    if (uid === undefined) return
+    if (uidRef.current !== null && uidRef.current !== uid) {
+      window.location.reload()
+      return
+    }
+    uidRef.current = uid
+  }, [uid])
   if (!ready) {
     return <div className="min-h-screen bg-slate-100 flex items-center justify-center text-slate-400">読み込み中…</div>
   }
@@ -79,6 +98,7 @@ function AppShell() {
           {/* 職員マスタ・連携設定への小さなリンク。ヘッダーは print:hidden 済みのため印刷影響なし */}
           <NavLink
             to="/staff-master"
+            onClick={guardLeave}
             title="職員マスタ（検食者・調理員の候補）"
             className={({ isActive }) => `text-sm ${isActive ? 'text-white font-medium' : 'text-emerald-100'}`}
           >
@@ -86,6 +106,7 @@ function AppShell() {
           </NavLink>
           <NavLink
             to="/ws-settings"
+            onClick={guardLeave}
             title="連携設定"
             className={({ isActive }) => `text-sm ${isActive ? 'text-white font-medium' : 'text-emerald-100'}`}
           >

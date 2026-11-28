@@ -152,7 +152,10 @@ export default function StaffMasterPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') void add()
+                // かな漢字の変換を確かめる Enter では追加しない・処理中は追加しない（ボタンと同じ止め＝2026-11-28 点検 低7）
+                if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
+                if (busy || !name.trim()) return
+                void add()
               }}
               placeholder="例: 山田"
               aria-label="追加する職員の氏名"
