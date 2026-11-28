@@ -190,6 +190,7 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
     if (saving || !data) return
     setSaving(true)
     setSaveError(null)
+    const key = `${data.menu_date}|${data.id}` // 押した時の日と行（待つ間に日を移ったら書かない）
     if (writeLock.current) {
       const until = Date.now() + AUTOSAVE_WAIT_MS
       while (writeLock.current && Date.now() < until) {
@@ -204,12 +205,16 @@ export function useDailyReport<T extends Record<string, any>>(cfg: {
       setSaveError('自動保存が終わりません。少し待ってから、もう一度保存してください。')
       return
     }
+    // 待つ間に別の日へ移った時は、移った先の値を押した日の記録へ書かない（2026-11-28 反証 2回目）
+    if (keyRef.current !== key) {
+      setSaving(false)
+      return
+    }
     writeLock.current = true
     const batch = afterSaveRef.current
     const token = batch.begin()
     let wrote = false
     try {
-      const key = `${data.menu_date}|${data.id}`
       // 画面の値と元は、同じ時点の組で取る（await の前）
       const snap = stRef.current
       const mine = snap.v
