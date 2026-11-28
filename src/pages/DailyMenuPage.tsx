@@ -159,7 +159,7 @@ export default function DayLayout() {
           {applyError && <span className="text-red-600 text-xs">{applyError}</span>}
           {applyDone && (
             <span className="basis-full text-amber-700 text-xs bg-amber-50 border border-amber-300 rounded px-2 py-1">
-              食数を反映しました。作業指示書タブの食数表示を最新にするには画面を再読込してください（再読込せず作業指示書を保存し直すと、反映前の食数に戻ります）。
+              食数を反映しました。作業指示書タブの食数にも入ります（作業指示書で食数を書き直している時は、書いた値が残ります）。
             </span>
           )}
         </div>
