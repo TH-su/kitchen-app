@@ -12,6 +12,7 @@ import {
   type ReadFrom,
 } from '../lib/wsClient'
 import { subscribe, getSnapshot, refreshNow } from '../lib/staffStore'
+import { expectedKitchenReadUrl } from '../lib/allowedHosts'
 
 // WS連携（読み取り専用GAS）の設定画面。/ws-settings（認証ゲート内）。
 //
@@ -297,7 +298,7 @@ export default function WsSettingsPage() {
                 setReadMsg(null)
                 setReadPing('idle')
               }}
-              placeholder="https://….supabase.co/functions/v1/kitchen-read"
+              placeholder={expectedKitchenReadUrl() ?? 'https://….supabase.co/functions/v1/kitchen-read'}
               autoComplete="off"
               className="mt-1 w-full border rounded px-3 py-2 text-sm"
             />
