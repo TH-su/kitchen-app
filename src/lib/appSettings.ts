@@ -17,10 +17,11 @@
 // ＝ログイン後に届いた値でヘッダ・帳票の表記と押印が差し替わる。
 import { supabase } from './supabase'
 import { KITCHEN_LABEL, SEAL_URL } from './facility'
+import { isAllowedSealSrc } from './allowedHosts'
 
 /** 施設名の設定キー（app_settings.key） */
 const FACILITY_KEY = 'facility_name'
-/** 施設長印の設定キー（app_settings.key）。値は data URL または画像URL。 */
+/** 施設長印の設定キー（app_settings.key）。値は data URL（画像）か、この画面と同じ Supabase に置いた画像の URL。 */
 const SEAL_KEY = 'seal_image'
 
 const TTL_MS = 30 * 60 * 1000 // 取得成功時の再取得間隔。30分（施設名・印影ともほぼ不変のため長め）
@@ -130,10 +131,21 @@ export function kitchenLabel(name: string | null): string {
   return name ? `${name}厨房` : KITCHEN_LABEL
 }
 
+let sealRejectWarned = false
 /**
  * 押印枠に出す画像。DB由来 > env（VITE_SEAL_URL）> 空（＝枠だけ印字して手押し）。
  * 引数はスナップショット（getSealImage の戻り値）を渡す。
+ * 公開版の CSP が通さない出どころ（data URL の画像・同じ Supabase 以外）は使わず、次の候補へ進む（2026-11-28）。
+ * 断った時は1度だけ console に理由を出す（値そのものは出さない）。
  */
 export function sealSrc(image: string | null): string {
-  return image || SEAL_URL
+  for (const c of [image, SEAL_URL]) {
+    if (!c) continue
+    if (isAllowedSealSrc(c)) return c
+    if (!sealRejectWarned) {
+      sealRejectWarned = true
+      console.warn('施設長印: 使えない出どころの画像のため表示しません（data URL の画像か、同じ保存先に置いた画像にしてください）')
+    }
+  }
+  return ''
 }

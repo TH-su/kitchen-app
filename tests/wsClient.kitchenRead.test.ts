@@ -61,6 +61,8 @@ function respond(r: Reply | undefined): Response {
 }
 
 beforeEach(() => {
+  // この画面がログインに使う Supabase（架空）。読み取り口はここの kitchen-read だけを通す
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://example-test.supabase.co')
   shared.values = new Map()
   shared.fail = false
   shared.calls = 0
@@ -95,6 +97,7 @@ beforeEach(() => {
   })
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -121,6 +124,8 @@ describe('読み取り口の設定', () => {
       ['http://example-test.supabase.co/functions/v1/kitchen-read', READ_KEY],
       ['https://example-test.supabase.co/functions/v1/clinic-read', READ_KEY],
       ['https://example-test.supabase.co/functions/v1/kitchen-read?x=1', READ_KEY],
+      // 別の Supabase の住所は、公開版の CSP で止まるので保存させない（2026-11-28）
+      ['https://other-project.supabase.co/functions/v1/kitchen-read', READ_KEY],
       [READ_URL, 'short'],
       [READ_URL, ''],
       ['', READ_KEY],
@@ -130,6 +135,26 @@ describe('読み取り口の設定', () => {
     }
     expect(store.size).toBe(0)
     expect(hasReadSource()).toBe(false)
+  })
+  it('別の Supabase の住所を入れた時は、正しい住所を文に出して断る', () => {
+    const r = saveKitchenReadConfig('https://other-project.supabase.co/functions/v1/kitchen-read', READ_KEY)
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain(READ_URL)
+  })
+  it('画面の保存先の設定が無い時は、どの住所も保存しない（安全側）', () => {
+    vi.stubEnv('VITE_SUPABASE_URL', '')
+    expect(saveKitchenReadConfig(READ_URL, READ_KEY).ok).toBe(false)
+    expect(store.size).toBe(0)
+  })
+  it('前に保存された別の住所の設定は使わない（読み先なし扱い）', () => {
+    store.set('kitchen_su_read_v1', JSON.stringify({ url: 'https://other-project.supabase.co/functions/v1/kitchen-read', key: READ_KEY }))
+    expect(readKitchenReadConfig()).toBeNull()
+  })
+  it('端末に残った別の住所の設定は使わず、共通の設定が無いと分かれば GAS から読む', async () => {
+    store.set('kitchen_su_read_v1', JSON.stringify({ url: 'https://other-project.supabase.co/functions/v1/kitchen-read', key: READ_KEY }))
+    setGas()
+    expect(await fetchResidentCounts()).toEqual({ residents: 2, hospitalized: 1 })
+    expect(readCalls()).toHaveLength(0)
   })
   it('両方とも空で保存すると外す', () => {
     setRead()
@@ -319,6 +344,7 @@ describe('全端末で共通の設定（app_settings）', () => {
     for (const [u, k] of [
       [READ_URL, 'short'],
       ['https://script.google.com/macros/s/x/exec', READ_KEY],
+      ['https://other-project.supabase.co/functions/v1/kitchen-read', READ_KEY],
     ]) {
       _resetSharedKitchenReadForTest()
       calls = []

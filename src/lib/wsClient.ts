@@ -13,6 +13,8 @@
 // 新しい保存先の読み取り口が設定されている時は、在籍者数・職員の氏名を先にそちらから読む（2026-11-07 代表者の決定「Aで進めて」）。
 // 読めた時は GAS を呼ばない。読めない・断られた（切り替える前を含む）・形が違う時は今までどおり GAS から読む。
 
+import { expectedKitchenReadUrl, isAllowedKitchenReadUrl } from './allowedHosts'
+
 // GAS エンドポイントの許容形式（ワークスケジュール側クライアントと同一基準）。
 const GAS_ENDPOINT_RE = /^https:\/\/script\.google\.com\/macros\/s\/.+\/exec/
 
@@ -73,8 +75,8 @@ export function saveSyncConfig(endpoint: string, token: string): { ok: boolean; 
 }
 
 // ── 新しい保存先の読み取り口（kitchen-read）──
-// 受け口の住所の許容形式（Supabase の関数 kitchen-read の住所だけ。プロジェクトの名前は書かない）。
-const KITCHEN_READ_URL_RE = /^https:\/\/[a-z0-9-]+\.supabase\.co\/functions\/v1\/kitchen-read$/
+// 受け口の住所は「この画面がログインに使う Supabase の kitchen-read」だけを通す（allowedHosts.ts）。
+// 公開版の CSP がその1か所しか許さないため（2026-11-28）。プロジェクトの名前はコードに書かない。
 // 自前保存キー（読み取り口の設定の書き先はここだけ）。
 const READ_KEY = 'kitchen_su_read_v1'
 // 合言葉の長さの下限（受け口と同じ・32文字以上）
@@ -99,7 +101,7 @@ let sharedInFlight: Promise<void> | null = null
 function validReadConfig(url: unknown, key: unknown): KitchenReadConfig | null {
   const u = typeof url === 'string' ? url.trim() : ''
   const k = typeof key === 'string' ? key.trim() : ''
-  if (!KITCHEN_READ_URL_RE.test(u) || k.length < READ_TOKEN_MIN) return null
+  if (!isAllowedKitchenReadUrl(u) || k.length < READ_TOKEN_MIN) return null
   return { url: u, key: k }
 }
 
@@ -184,8 +186,14 @@ export function saveKitchenReadConfig(url: string, key: string): { ok: boolean; 
       localStorage.removeItem(READ_KEY)
       return { ok: true }
     }
-    if (!KITCHEN_READ_URL_RE.test(u)) {
-      return { ok: false, error: 'URL は https://….supabase.co/functions/v1/kitchen-read の形にしてください' }
+    if (!isAllowedKitchenReadUrl(u)) {
+      const want = expectedKitchenReadUrl()
+      return {
+        ok: false,
+        error: want
+          ? `URL は ${want} にしてください（この画面と同じ保存先の読み取り口だけを使えます）`
+          : 'この画面の保存先の設定が見つからないため、読み取り口を保存できません（管理者に連絡してください）',
+      }
     }
     if (k.length < READ_TOKEN_MIN) {
       return { ok: false, error: `合言葉は ${READ_TOKEN_MIN} 文字以上です（管理者から受け取った値をそのまま入れてください）` }

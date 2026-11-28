@@ -12,7 +12,7 @@
 //   VITE_FACILITY_NAME       施設名のみ（「厨房」は付けない）  例: サンプルホーム
 //   VITE_REPORT_INSPECTORS   検食者候補・区切りは , 、 ，       例: 検食者A,検食者B
 //   VITE_REPORT_COOKS        調理担当者候補（同上）             例: 調理A,調理B
-//   VITE_SEAL_URL            施設長印の画像URL（未設定なら押印枠は空欄＝手押し運用）
+//   VITE_SEAL_URL            施設長印の画像（data URL か同じ Supabase に置いた画像の URL。それ以外・未設定なら押印枠は空欄＝手押し運用）
 //
 // ⚠ VITE_ 変数はビルド時に配信JSへ埋め込まれる（＝公開される）。ソース/gitから氏名を外す効果は
 //   あるが、公開バンドルからは読み取れる。真に秘匿するならDB＋RLS経由での取得が必要。
