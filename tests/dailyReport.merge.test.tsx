@@ -39,7 +39,8 @@ function Page({ data }: { data: any }) {
   hook = useDailyReport<R>({ data, editable: true, reload: () => {}, column: 'kenshoku', empty, merge, applyAuto })
   return null
 }
-const flush = () => act(async () => { for (let i = 0; i < 30; i++) await Promise.resolve() })
+// 本番と同じ並行描画の根で回す（setState がその場で描画されない＝描画の時機の取り違えを拾う・2026-11-28 反証）
+const flush = () => act(async () => { for (let i = 0; i < 10; i++) { await vi.advanceTimersByTimeAsync(1); await Promise.resolve() } })
 
 let root: ReactTestRenderer
 beforeEach(() => {
@@ -56,8 +57,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 const mount = async () => {
-  const data = { id: 1, menu_date: '2000-01-01', kenshoku: JSON.parse(JSON.stringify(dbValue)) }
-  await act(async () => { root = create(<Page data={data} />) })
+  const data: any = { id: 1, menu_date: '2000-01-01', kenshoku: JSON.parse(JSON.stringify(dbValue)) }
+  await act(async () => { root = create(<Page data={data} />, { unstable_isConcurrent: true } as any) })
   await flush()
   return data
 }
@@ -119,12 +120,76 @@ describe('開いたままの端末の手動保存', () => {
     expect(done).toBe(false) // 自動保存を待っている
     const rel = holdAuto!.release
     holdAuto = null
-    await act(async () => { rel(); await p })
+    rel()
     await flush()
+    await act(async () => { await p })
     expect(done).toBe(true)
     const last = written[written.length - 1]
     expect(last.dinner.note).toBe('架空の夕食の所見')
     expect(last.lunch.time).toBe('07:50') // 自動保存の値も消さない
     expect(hook.saveError).toBe(null)
+  })
+
+  it('自動保存の最中に他の端末の値が入り、その最中に保存しても、他の端末の欄を消さない（反証 場面A）', async () => {
+    await mount()
+    autoOn = true
+    dbValue = { lunch: { note: '架空の昼食の所見', time: '' }, dinner: { note: '', time: '' } }
+    holdAuto = { release: () => {} }
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+    act(() => hook.setV((c) => ({ ...c, dinner: { ...c.dinner, note: '架空の夕食の所見' } })))
+    let p!: Promise<void>
+    act(() => { p = hook.save() })
+    await flush()
+    const rel = holdAuto!.release
+    holdAuto = null
+    rel()
+    await flush()
+    await act(async () => { await p })
+    expect(dbValue.lunch.note).toBe('架空の昼食の所見')
+    expect(dbValue.lunch.time).toBe('07:50')
+    expect(dbValue.dinner.note).toBe('架空の夕食の所見')
+  })
+
+  it('保存の読み直しの間に取り直しが届いても、他の端末の欄を消さない（反証 場面B）', async () => {
+    const data = await mount()
+    act(() => hook.setV((c) => ({ ...c, dinner: { ...c.dinner, note: '架空の夕食の所見' } })))
+    dbValue = { lunch: { note: '架空の昼食の所見', time: '12:30' }, dinner: { note: '', time: '' } }
+    let p!: Promise<void>
+    act(() => { p = hook.save() })
+    // 保存の途中で、他の端末の値が入った取り直しが届く
+    await act(async () => { root.update(<Page data={{ ...data, kenshoku: JSON.parse(JSON.stringify(dbValue)) }} />) })
+    await flush()
+    await act(async () => { await p })
+    expect(dbValue.lunch).toEqual({ note: '架空の昼食の所見', time: '12:30' })
+    expect(dbValue.dinner.note).toBe('架空の夕食の所見')
+  })
+
+  it('開いた時の自動保存が失敗しても、自動の既定値で他の端末の手直しを戻さない（反証 中2）', async () => {
+    autoOn = true
+    const daily = await import('../src/lib/daily')
+    ;(daily.fetchReportColumn as any).mockImplementationOnce(async () => { throw new Error('架空の通信切れ') })
+    await mount()
+    expect(hook.v.lunch.time).toBe('07:50')
+    // 他の端末が自動値の時刻を直して保存
+    dbValue = { lunch: { note: '', time: '08:10' }, dinner: { note: '', time: '' } }
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+    await flush()
+    expect(hook.v.lunch.time).toBe('08:10')
+    act(() => hook.setV((c) => ({ ...c, dinner: { ...c.dinner, note: '架空の夕食の所見' } })))
+    await act(async () => { await hook.save() })
+    await flush()
+    expect(dbValue.lunch.time).toBe('08:10')
+  })
+
+  it('自動保存が終わらない時は、待ち続けずに知らせる', async () => {
+    autoOn = true
+    holdAuto = { release: () => {} } // 放さない
+    await mount()
+    let p!: Promise<void>
+    act(() => { p = hook.save() })
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000) })
+    await act(async () => { await p })
+    expect(hook.saveError).toMatch(/自動保存が終わりません/)
+    holdAuto = null
   })
 })

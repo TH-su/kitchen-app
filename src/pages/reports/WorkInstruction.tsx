@@ -273,7 +273,8 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   const [saveError, setSaveError] = useState<string | null>(null)
   const [grainNotPersisted, setGrainNotPersisted] = useState(false)
 
-  const openedRef = useRef<Panel>(panelOf(null)) // 画面の値を作った元（最後に知った DB の値）
+  // 画面の値を作った元（最後に知った DB の値）。画面の値と同じ描画の組になるよう state で持つ（2026-11-28 反証）
+  const [opened, setOpened] = useState<Panel>(() => panelOf(null))
   const keyRef = useRef('')
   const setPanel = (p: Panel) => {
     setMealCount(p.mealCount)
@@ -287,14 +288,14 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   const curPanel = (): Panel => ({ mealCount, bf, ln, dn, snack, note, grainG })
   // 選択パネルを触って保存していない時は、画面の中で移る前に確かめる（2026-11-28 点検 中4）
   const panelDirtyRef = useRef(false)
-  panelDirtyRef.current = editable && JSON.stringify(curPanel()) !== JSON.stringify(openedRef.current)
+  panelDirtyRef.current = editable && JSON.stringify(curPanel()) !== JSON.stringify(opened)
   useEffect(() => registerUnsaved(() => panelDirtyRef.current), [])
 
   // data → 選択パネル同期（日付 or レコード変化時は作り直す）
   useEffect(() => {
     const p = panelOf(data)
     keyRef.current = `${date}|${data?.id ?? ''}`
-    openedRef.current = p
+    setOpened(p)
     setPanel(p)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, data?.id])
@@ -304,9 +305,8 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
   useEffect(() => {
     if (keyRef.current !== `${date}|${data?.id ?? ''}`) return
     const next = panelOf(data)
-    const opened = openedRef.current
     if (JSON.stringify(next) === JSON.stringify(opened)) return
-    openedRef.current = next
+    setOpened(next)
     setPanel(rebasePanel(curPanel(), opened, next))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
@@ -318,10 +318,16 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
     try {
       // 保存の直前に最新を読み、この画面で触った項目だけを最新に重ねて書く
       // （開いたままの端末が、他の端末で変えた献立・食数・メモを古い値に戻さない＝2026-11-28 点検 中2）
+      // 画面の値と開いた時の値は、押した時の同じ描画の組で取る（await の前）
+      const mine = curPanel()
+      const base = opened
+      const key = keyRef.current
       const latest = await fetchDailyMenuByDate(date)
-      const p = latest ? rebasePanel(curPanel(), openedRef.current, panelOf(latest)) : curPanel()
+      const p = latest ? rebasePanel(mine, base, panelOf(latest)) : mine
       const n = Number(p.mealCount)
       if (!Number.isInteger(n) || n < 1 || n > 100000) throw new Error('食数は1以上の整数で入力してください')
+      const grainSaved =
+        p.grainG.trim() === '' ? latest?.stapleGrainG ?? data?.stapleGrainG ?? STAPLE_DEFAULT_G : normalizeGrainG(Number(p.grainG))
       await upsertDailyMenu({
         menu_date: date,
         meal_count: n,
@@ -330,8 +336,22 @@ export default function WorkInstruction({ date, data, reload, editable, pickSets
         dinner_set_id: numOrNull(p.dn),
         snack_dish_id: numOrNull(p.snack),
         note: p.note.trim() || null,
-        staple_grain_g: p.grainG.trim() === '' ? latest?.stapleGrainG ?? data?.stapleGrainG ?? STAPLE_DEFAULT_G : normalizeGrainG(Number(p.grainG)),
+        staple_grain_g: grainSaved,
       })
+      // 保存した値（整えた後）を開いた時の値に進める。押した後に触っていない項目は保存した値にそろえる
+      // （整えた値・空欄の主食量で「未保存」が残り、移るたびに確かめが出ていた＝2026-11-28 反証 低3）
+      if (keyRef.current === key) {
+        const sp: Panel = { ...p, mealCount: String(n), note: p.note.trim(), grainG: String(grainSaved) }
+        setOpened(sp)
+        const keep = (cur: string, was: string, to: string) => (cur === was ? to : cur)
+        setMealCount((c) => keep(c, mine.mealCount, sp.mealCount))
+        setBf((c) => keep(c, mine.bf, sp.bf))
+        setLn((c) => keep(c, mine.ln, sp.ln))
+        setDn((c) => keep(c, mine.dn, sp.dn))
+        setSnack((c) => keep(c, mine.snack, sp.snack))
+        setNote((c) => keep(c, mine.note, sp.note))
+        setGrainG((c) => keep(c, mine.grainG, sp.grainG))
+      }
       setGrainNotPersisted(!isStapleColAvailable()) // 列欠落フォールバック時は主食量が保存されていない
       reload()
     } catch (e: any) {
